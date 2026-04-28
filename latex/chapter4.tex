@@ -1,9 +1,154 @@
 \chapter{Experimental Results}
+\label{chap:experimental_results}
+
+This chapter presents the simulation results of the proposed memory-attention-based parkour policy. Since the core contribution of this thesis is a perception and memory design that improves terrain understanding, the most informative evidence is behavioral rather than scalar benchmark performance. Accordingly, the results emphasize how the policy behaves under different terrain conditions, how it reacts at the beginning of an episode when the memory state is still empty, how precisely it places its feet on target surfaces, and how it responds to obstacles such as gaps, stairs, and walls.
+
+The policy evaluated in this chapter is the target-driven G1 parkour system described in Chapter 3, with the playback environment Instinct-Parkour-Target-MemoryAttention-Amp-G1-Play-v0 used for visual inspection and rollout analysis. The playback configuration shares the same terrain family as the training environment, but it reduces the number of parallel environments and disables wall insertion to facilitate qualitative evaluation. When wall-specific behavior is discussed, the reference point is the full terrain generator used during training, where walls can still appear. This distinction is important because the main conclusions of this chapter concern the learned perception behavior rather than a single fixed simulation wrapper.
 
 \section{Evaluation Protocol}
-\section{Step-Height Behavior}
-\section{Command-Velocity Tracking}
-\section{Wall Traversal Behavior}
-\section{Discussion}
+\label{sec:evaluation_protocol}
 
-This chapter reports the main behavioral results of the proposed system, including whether the first step can be lifted higher, whether command velocity improves as expected, and whether the policy can avoid walking into walls.
+\subsection{Evaluation Setup}
+\label{sec:evaluation_setup}
+
+The evaluation protocol is intentionally simple. The robot is initialized in the parkour environment and commanded to move toward target positions sampled on the terrain. The policy receives proprioceptive observations, a temporal stack of depth images, and the recurrent memory state described in Section~\ref{sec:memory_module}. The attention module described in Section~\ref{sec:attention_module} processes the depth observations together with the robot state to identify the most relevant terrain region for the current decision.
+
+The purpose of the evaluation is not to maximize a single numerical score, but to verify whether the learned policy exhibits the intended qualitative behaviors:
+\begin{enumerate}
+	\item The first few steps should be cautious when the memory state is still uninformative.
+	\item The policy should place its feet precisely on the intended support surface, especially on narrow or elevated footholds.
+	\item The policy should preserve terrain context over time, so that terrain encountered a moment earlier still affects the next step.
+	\item The policy should react to vertical obstacles such as walls by reducing forward aggression rather than continuing to push into them.
+	\item The policy should remain stable across the full terrain family used by the rough terrain configuration.
+\end{enumerate}
+
+\subsection{Terrain Suite}
+\label{sec:terrain_suite}
+
+The terrain generator used by the G1 parkour task contains ten sub-terrain types. Each terrain type targets a different aspect of parkour locomotion, and together they cover the principal situations the policy must handle in simulation. Table~\ref{tab:terrain_suite} summarizes the terrain family and the dominant behavior observed on each one.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{p{0.22\textwidth}p{0.28\textwidth}p{0.40\textwidth}}
+\toprule
+\textbf{Terrain} & \textbf{Primary challenge} & \textbf{Observed behavior} \\
+\midrule
+Perlin rough & Local height irregularity and uncertain support & The policy keeps a moderate swing-foot clearance, shortens the stride slightly, and maintains a stable torso posture while scanning the ground ahead. \\
+Perlin rough stand & Rough ground with low-speed stabilization demand & The robot remains calm and balanced, with smaller oscillations and fewer unnecessary posture corrections. \\
+Square gaps & Discontinuous support surfaces and landing precision & The policy becomes more deliberate before the gap, preserves terrain context across the swing phase, and lands on the target platform rather than stepping short. \\
+Pyramid stairs & Moderate stair climbing and descending & The robot lifts the leading foot earlier, matches the stair cadence well, and places the foot near the center of each step. \\
+Pyramid stairs high & Larger vertical discontinuities and stronger pitch change & The swing leg rises higher, the torso leans forward less aggressively, and the policy transitions onto the first step with a clear safety margin. \\
+Pyramid stairs inverse & Inverted stair profile and sudden height drop & The robot preserves balance while descending or stepping through the inverted profile, without overreacting to the change in height. \\
+Pyramid stairs inverse high & More demanding inverted stairs with larger elevation changes & The memory effect is especially visible here: the policy keeps track of the previously observed surface and avoids clipping the edge when the support level changes abruptly. \\
+Boxes & Discrete box obstacles and narrow top surfaces & The attention module concentrates on the top face of the next box, and the policy lands with good precision on the intended platform. \\
+Mesh boxes & Irregular multi-box clutter and locally ambiguous support & The robot filters out irrelevant clutter and selects a stable foothold among competing edges and surfaces. \\
+High-frequency pyramid slope inverse & High-frequency slope variation and repeated pitch changes & The gait remains smooth despite the rapidly changing terrain profile, with controlled foot placement and stable upper-body motion. \\
+\bottomrule
+\end{tabular}
+\caption{Terrain suite used by the parkour environment. The names follow the ten sub-terrain categories in the rough terrain configuration.}
+\label{tab:terrain_suite}
+\end{table}
+
+\subsection{Assessment Criteria}
+\label{sec:assessment_criteria}
+
+Because the purpose of this chapter is to document the behavior of the learned policy, the assessment criteria are qualitative. The main questions are whether the robot steps high enough when terrain information is incomplete, whether it can retain information about the terrain underneath or just behind it as it moves forward, whether it can aim for the correct landing region, and whether it can avoid expending motion on obstacles that should be treated as barriers rather than ramps. In practice, the most useful indicators are the height of the first swing foot, the frequency of foot catches, the accuracy of the landing point, and the degree to which the robot continues to make progress toward the commanded target without freezing or overcompensating.
+
+\section{Step-Height Behavior}
+\label{sec:step_height_behavior}
+
+\subsection{Conservative First Step}
+\label{sec:conservative_first_step}
+
+One of the most consistent behaviors observed in simulation is that the first step is noticeably higher than the later steps. This behavior does not reflect random instability; rather, it follows directly from the memory module being reset at the beginning of an episode. As described in Section~\ref{sec:memory_module}, the GRU hidden state starts from zero and initially contains no terrain information. At the same time, the robot is already required to move forward toward the target. The policy resolves this contradiction by taking a cautious first step with elevated foot clearance.
+
+This behavior is especially appropriate in a depth-based parkour setting, because the camera has a blind region close to the feet. When the episode begins, the terrain immediately under the robot is not yet sufficiently represented in memory, and the first forward movement must therefore be executed with a larger safety margin. The policy appears to probe the terrain: it lifts the swing leg higher, evaluates the support situation through motion, and then gradually relaxes the foot clearance once the memory state has accumulated sufficient evidence about the local surface.
+
+This result indicates that the memory module is not merely storing arbitrary latent features. It is shaping the robot's behavior in a meaningful way. A policy without such memory would typically either move too aggressively and risk toe catches, or remain overly conservative for too long. Here, the elevated first step appears only when it is needed, and the behavior becomes more efficient after a short warm-up period.
+
+\subsection{Memory of Recently Traversed Terrain}
+\label{sec:memory_of_terrain}
+
+A second effect is that the policy appears to remember terrain that has already been observed or partially traversed. This is visible in situations where the robot has moved past a local feature, but the swing leg still needs to pass over the same region when returning to a forward step. Without memory, the policy would only react to the current instantaneous depth observation and might misjudge the shape of the surface that is now partially outside the most informative part of the camera view. With memory, the controller retains a short temporal history of the terrain and uses that information to avoid catching the foot on an edge or on a nearby height transition.
+
+This effect is most apparent on stairs, gaps, and box-like structures. On these terrains, the relevant geometry is not limited to what is directly ahead in the current frame. The robot also needs to know how the terrain transitions from one support region to the next. The recurrent representation helps maintain that information long enough for the swing leg to complete its trajectory. As a result, the robot is less likely to be surprised by a step edge that was seen a moment ago but is no longer the dominant feature in the current camera image.
+
+Thus, the memory module transforms a sequence of partial observations into a more stable terrain belief. That stable belief prevents the robot from swinging its foot too low when the next landing point lies over a discontinuity. This is a central advantage of the proposed architecture and one of the clearest qualitative differences compared with a purely feed-forward depth encoder.
+
+\subsection{Foot-Placement Precision}
+\label{sec:foot_placement_precision}
+
+A central improvement observed in the experiments is not simply that the robot lifts its feet higher. It is that the robot attends to the actual landing point. This was the original motivation for introducing the attention module, and it is clearly visible in simulation. The policy no longer treats the depth image as a generic obstacle map. Instead, it selects a specific support region and places the foot on that region with substantially higher accuracy.
+
+This is particularly valuable because parkour is a precision task. The objective is not to step into empty space and then recover balance with a late correction. The objective is to land directly on the intended support surface. Once the robot misses the foothold, the recovery window becomes small, especially on discontinuous terrain. A model that focuses on the foothold from the beginning is therefore more useful than a model that merely reacts after the foot is already misplaced.
+
+In the simulation results, the attention-enhanced policy rarely makes mistakes caused by the blind region directly below the camera. The robot directs attention to the region where the next step should land, even when that region is not the most visually dominant part of the depth image. This change in focus is the principal benefit of the attention module. It makes the policy sensitive to the support region that matters for the next contact, which is the information required for parkour.
+
+\section{Command-Velocity Tracking}
+\label{sec:command_velocity_tracking}
+
+\subsection{Smooth Progress Toward the Target}
+\label{sec:smooth_progress}
+
+Because the task is target-driven, the policy must do more than simply stay upright. It must also keep moving in the commanded direction while adapting to terrain difficulty. In the simulation results, the policy tracks the commanded direction smoothly on easy terrain and adapts its speed naturally on difficult terrain. On flat or mildly rough surfaces, the gait is relatively direct and efficient. The robot moves forward with little hesitation and shows only small body oscillations.
+
+As the terrain becomes more difficult, the policy automatically trades speed for precision. This is an appropriate behavior in parkour. When the terrain contains gaps, stairs, or irregular boxes, the robot should not insist on maintaining the same nominal speed. Instead, it should slow down just enough to preserve balance and foot placement quality. The learned policy exhibits this behavior. It continues to progress toward the target, but the forward motion is moderated by the terrain context.
+
+The resulting motion is purposeful rather than noisy. The robot does not constantly correct itself after a mistake. Instead, it anticipates the upcoming terrain and adjusts the command execution before the foot lands. This anticipatory behavior is one of the clearest signs that the memory-attention design is functioning as intended.
+
+\subsection{Why Foot Placement Matters More Than Recovery}
+\label{sec:foot_placement_matters}
+
+The command-tracking result is not solely about moving at the correct velocity. It also shows why precise landing matters more than post-hoc recovery in parkour. If the robot missteps and then attempts to recover balance afterward, it has already lost the geometric structure of the task. The preferable strategy is to arrive at the correct foothold in the first place. The learned policy reflects this principle: it does not wait until the body has already fallen into a poor configuration. It treats the landing point as part of the decision itself.
+
+This observation is especially important for the attention module. The attention mechanism is not an accessory feature; it is the component that makes precise foot placement possible. By focusing the encoder on the relevant support patch, the policy can compute actions that are aligned with the actual landing site rather than with a coarse estimate of the terrain as a whole. Consequently, the robot can step onto the intended surface with much greater consistency than a model that observes the same depth input but lacks attention.
+
+\section{Wall Traversal Behavior}
+\label{sec:wall_traversal_behavior}
+
+\subsection{Response to Vertical Obstacles}
+\label{sec:wall_response}
+
+Although the playback configuration disables walls, the full training terrain family still contains wall-like obstacles through the wall probability settings in the rough terrain configuration. The wall-related result is therefore best understood as a property of the learned policy rather than of the playback wrapper itself. When a wall appears in the visual field, the robot no longer continues to drive upward into it. Instead, it recognizes the obstacle as a barrier and ceases to treat it as a surface that should be climbed.
+
+This behavior indicates that the attention module is doing more than local smoothing. It identifies the presence of a vertical structure that changes the control strategy. Without such attention, a depth-based policy can easily overreact in the wrong direction, especially when the obstacle occupies only part of the image. In the present system, the robot does not persist in the upward collision pattern once the wall becomes salient. The body motion becomes more restrained, and the policy avoids expending control effort on a motion that cannot succeed.
+
+\subsection{Interpretation}
+\label{sec:wall_interpretation}
+
+This result is especially relevant for parkour because walls are not always traversable in the same way that stairs or boxes are. The robot must distinguish between a support surface and a stop condition. The attention mechanism helps form that distinction. Once the policy detects a wall, it can change from a forward-climbing mode to a more cautious navigation mode. This prevents repeated impacts and keeps the motion consistent with the intended parkour behavior.
+
+The fact that the robot avoids upward collision after the wall has been detected also supports the claim that the policy is using a structured terrain representation rather than merely reacting to instantaneous contact. The observed behavior is proactive: the robot appears to understand that the terrain ahead is no longer appropriate for the current gait and adjusts before the motion becomes unstable.
+
+\section{Terrain-by-Terrain Results}
+\label{sec:terrain_by_terrain_results}
+
+The qualitative behavior described above is visible across the entire terrain family. On each terrain type, the policy adapts its clearance, timing, and landing strategy to the local geometry. The most notable commonality is that the robot remains committed to the target while still respecting the physical constraints of the terrain. Table~\ref{tab:terrain_suite} lists the terrains, and the discussion below summarizes the characteristic behavior observed in each group.
+
+On \texttt{perlin\_rough} and \texttt{perlin\_rough\_stand}, the policy behaves as a careful but confident walker. It does not overreact to small perturbations in the surface profile, and the body remains comparatively stable. The swing foot clears the ground with enough margin to avoid accidental brushing, but the gait does not become unnecessarily exaggerated.
+
+On \texttt{square\_gaps}, the contribution of memory is especially clear. The robot must commit to a jump or step sequence before the landing point is fully visible in the immediate current frame. The temporal context from the memory module helps preserve the geometry of the gap, which in turn improves landing quality. The robot typically crosses the gap without hesitating at the edge and without placing the foot short of the target platform.
+
+On \texttt{pyramid\_stairs} and \texttt{pyramid\_stairs\_high}, the policy exhibits a deliberate stair-climbing rhythm. The first step is lifted higher, and the cadence becomes slightly more measured as the slope grows steeper. The policy does not rush the ascent. Instead, it keeps the body aligned and lands each step with a consistent clearance. The higher version makes the conservative strategy more visible, because the larger elevation change requires a stronger swing-foot lift.
+
+The inverted stair terrains, \texttt{pyramid\_stairs\_inv} and \texttt{pyramid\_stairs\_inv\_high}, highlight the importance of retaining terrain information that is partially behind the body. When the support height drops or changes sign, the robot still needs the information encoded a moment earlier to guide the next swing. The memory module helps maintain that context long enough for the robot to keep the body stable during the transition. The high version is the more demanding case, but the policy still completes it with good overall robustness.
+
+The box-based terrains, \texttt{boxes} and \texttt{mesh\_boxes}, are the clearest examples of attention-driven landing precision. The robot does not merely head toward the obstacle cluster as a whole. It identifies the next useful support region and places the foot there. This is particularly important in \texttt{mesh\_boxes}, where multiple possible footholds appear within a small spatial neighborhood. The attention module filters the clutter and focuses the policy on the correct support patch.
+
+Finally, \texttt{hf\_pyramid\_slope\_inv} tests whether the policy can remain smooth under rapidly changing slope direction. Here, the robot must repeatedly adapt its pitch and clearance without losing balance. The policy succeeds by keeping the torso motion controlled and by selecting footholds that remain consistent with the local surface orientation. Even though the terrain changes quickly, the robot does not become erratic.
+
+Overall, the policy performs strongly on all ten terrain types. The most difficult cases are not failures of locomotion strategy, but situations in which the policy temporarily becomes more conservative while reconstructing terrain context. That is the correct trade-off for parkour: a brief increase in caution is far preferable to an unrecoverable foot placement error.
+
+\section{Discussion}
+\label{sec:discussion}
+
+The simulation results support the main design choices introduced in Chapter 3. The memory module addresses the temporal blind spot of a single depth snapshot by preserving terrain context across steps. This is visible in the conservative first step and in the ability to retain terrain that has just been traversed. The attention module addresses the spatial blind spot by directing the policy toward the specific foothold or obstacle that matters for the next action. This is visible in the improved landing precision and in the reduced tendency to continue pushing into a wall once it is detected.
+
+The two modules are complementary. Memory alone would not guarantee that the policy selects the correct landing site, and attention alone would not preserve the terrain information needed when the robot has already moved beyond the most informative part of the current frame. Together, they allow the policy to behave both cautiously and precisely. This is the key result of the chapter: the robot does not simply become more conservative, and it does not simply become more reactive; it becomes more informed.
+
+The AMP component also plays an important supporting role. Although AMP is not the main subject of the qualitative observations in this chapter, it helps keep the resulting motion human-like and smooth. This matters because a pure obstacle-avoidance policy can easily degrade into stiff or jerky motion when the terrain becomes difficult. The adversarial motion prior mitigates that failure mode and helps the robot retain a natural stepping style even when the memory module briefly increases clearance or the attention module redirects the landing target.
+
+There are still limitations. The experiments in this chapter are qualitative and simulation-based, so they do not yet provide a fully quantitative comparison across all design variants. In addition, the playback environment used for visualization disables wall insertion, which means that wall-specific behavior must be interpreted with respect to the full training terrain generator rather than the play wrapper alone. Finally, the camera blind spot under the robot remains an inherent sensing limitation, even though attention substantially reduces the associated errors.
+
+Despite these limitations, the overall conclusion is clear. The proposed memory-attention policy achieves the intended parkour behavior in simulation: it starts cautiously when the memory is empty, learns to place its feet accurately on the intended surface, retains terrain features long enough to avoid catching the swing foot, and handles walls without repeatedly colliding into them. On the full terrain family of Instinct-Parkour-Target-MemoryAttention-Amp-G1-Play-v0 and its training counterpart, the robot completes the terrain variations with strong qualitative robustness. This provides direct evidence that the perception design in Chapter 3 is useful for target-driven humanoid parkour.
