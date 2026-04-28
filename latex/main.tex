@@ -14,20 +14,23 @@
 \usepackage{subcaption}
 \usepackage{enumitem}
 \usepackage[hidelinks]{hyperref}
+\usepackage{titlesec}
+\titleformat{\chapter}[display]
+  {\normalfont\huge\bfseries}{}{0pt}{\Huge}
 
 \setstretch{1.5}
 
 \renewcommand{\bibname}{References}
 
 \newcommand{\ThesisTitleText}{Target-Driven Memory-Attention-Enhanced Humanoid Parkour}
-\newcommand{\ThesisAuthorText}{Your Name}
+\newcommand{\ThesisAuthorText}{Xinyu SHENG}
 \newcommand{\ThesisProgramText}{[Name of Program]}
-\newcommand{\ThesisThrustText}{[Full Name of Your Thrust]}
-\newcommand{\ThesisCompletionDateText}{[Month Year]}
+\newcommand{\ThesisThrustText}{Thrust of Robotics and Autonomous Systems}
+\newcommand{\ThesisCompletionDateText}{July 2026}
 \newcommand{\ThesisAbstractText}{[Abstract text, 300 words or less]}
-\newcommand{\SupervisorName}{[Supervisor Name]}
-\newcommand{\CoSupervisorName}{[Co-Supervisor Name]}
-\newcommand{\ThrustHeadName}{[Thrust Head Name]}
+\newcommand{\SupervisorName}{Jun MA}
+\newcommand{\CoSupervisorName}{Qiang NIE}
+\newcommand{\ThrustHeadName}{Qiang HUANG}
 
 \begin{document}
 
@@ -80,7 +83,7 @@ I further authorize the Hong Kong University of Science and Technology (Guangzho
 \vfill
 \noindent \ThesisAuthorText\par
 \vspace{2\baselineskip}
-[Date]\par
+15 July 2026\par
 
 \clearpage
 \thispagestyle{plain}
@@ -101,7 +104,7 @@ This is to certify that I have examined the above MPhil thesis and have found th
 \vspace{1.5em}
 \noindent \ThrustHeadName, Head of Thrust\par
 \vfill
-\noindent [Date]\par
+\noindent 15 July 2026\par
 
 \tableofcontents
 \listoffigures
@@ -109,15 +112,16 @@ This is to certify that I have examined the above MPhil thesis and have found th
 
 \mainmatter
 
-\include{chapter0}
+
 \include{chapter1}
 \include{chapter2}
 \include{chapter3}
 \include{chapter4}
 \include{chapter5}
 \include{chapter6}
+\include{chapter7}
 
 \backmatter
-\include{chapter7}
+\include{chapter8}
 
 \end{document}
