@@ -1,0 +1,141 @@
+25mm
+
+25mm
+25mm
+
+[SAMPLE TITLE PAGE]
+
+25mm
+
+Not needed on
+your actual title
+page
+
+[Thesis Title with the first letter of all words capitalized, except for
+prepositions, articles and coordinate conjunctions that do not appear as the first word]
+
+"[" , "]" are unnecessary
+(5 lines)
+
+by
+(single line)
+[Your name as found in official HKUST(GZ) records, excluding any titles]
+Firstname SURNAME
+
+"[" , "]" are unnecessary
+(5 lines)
+
+A Thesis Submitted to
+The Hong Kong University of Science and Technology (Guangzhou)
+in Partial Fulfillment of the Requirements for
+the Degree of Master of Philosophy
+full name of your Thrust
+in [Name of Program]
+Not the Abbreviation
+(3 lines)
+[month and year], Guangzhou
+
+"[" , "]" are unnecessary
+
+[Adjust spacing so that all Title Page information appears on one page.]
+Not needed on your
+actual title page
+
+25mm
+
+25mm
+
+i
+25mm
+
+25mm
+
+[SAMPLE ABSTRACT PAGE]
+
+Not needed on your actual
+authorization page
+
+[Thesis Title with the first letter of all words capitalized, except for
+prepositions, articles and coordinate conjunctions that do not appear as the first word]
+by [Your name as found in official HKUST(GZ) records, excluding any titles]
+Firstname SURNAME
+
+[Name of Thrust/Program Office]
+
+"[" , "]" are unnecessary
+full name of your Thrust
+Not the Abbreviation
+
+The Hong Kong University of Science and Technology (Guangzhou)
+
+Abstract
+[Abstract text, 300 words or less]
+
+ii
+
+Not needed on your actual
+[SAMPLE AUTHORIZATION PAGE] authorization page
+Authorization
+
+I hereby declare that I am the sole author of the thesis.
+I authorize the Hong Kong University of Science and Technology (Guangzhou) to
+lend this thesis to other institutions or individuals for the purpose of scholarly research.
+I further authorize the Hong Kong University of Science and Technology (Guangzhou)
+to reproduce the thesis by photocopying or by other means, in total or in part, at the request of
+other institutions or individuals for the purpose of scholarly research.
+
+Firstname SURNAME
+[type under signature line your name as found in official HKUST(GZ)
+records, excluding any titles]
+[Date, e.g. 31 August 2015]
+
+Actual final thesis completion date
+
+iii
+
+Not needed on your
+acture signature
+page
+[Thesis Title with the first letter of all words capitalized, except for
+[SAMPLE SIGNATURE PAGE]
+
+prepositions, articles and coordinate conjunctions that do not appear as the first word]
+"[" , "]" are unnecessary
+
+by
+[Your name as found in official HKUST(GZ) records, excluding any titles]
+Firstname SURNAME
+"[" , "]" are unnecessary
+This is to certify that I have examined the above MPhil thesis
+and have found that it is complete and satisfactory in all respects,
+and that any and all revisions required by
+the thesis examination committee have been made.
+
+Prof Firstname SURNAME, Thesis Supervisor Use 'Thesis Supervisor' directly
+Do not make changes !
+Strictly follow the naming convention
+
+Prof Firstname SURNAME, Thesis Co-Supervisor Use 'Thesis Co-Supervisor'
+Do not make changes !
+Strictly follow the naming convention
+
+Use 'Head of Thrust'
+Do not make changes !
+For CMA Thrust students,
+please use "Acting Head of
+Thrust"
+
+Prof Xiaowen CHU, Head of Thrust
+Make sure the name of Thrust Head is correct
+Not the Hub Dean(unless same person)
+Not the RBM Head
+Data Science and Analytics Thrust Full name of your Thrust
+Do NOT forget the word 'Thrust'
+Do NOT add the name of Hub
+[Date, e.g. 31 August 2025]
+Do NOT use abbreviation
+Actual final thesis completion date
+Do NOT use "Thrust of ..."
+iv
+
+
