@@ -17,20 +17,97 @@
 
 \setstretch{1.5}
 
-\title{Target-Driven Memory-Attention-Enhanced Humanoid Parkour}
-\author{Your Name}
-\date{\today}
+\renewcommand{\bibname}{References}
+
+\newcommand{\ThesisTitleText}{Target-Driven Memory-Attention-Enhanced Humanoid Parkour}
+\newcommand{\ThesisAuthorText}{Your Name}
+\newcommand{\ThesisProgramText}{[Name of Program]}
+\newcommand{\ThesisThrustText}{[Full Name of Your Thrust]}
+\newcommand{\ThesisCompletionDateText}{[Month Year]}
+\newcommand{\ThesisAbstractText}{[Abstract text, 300 words or less]}
+\newcommand{\SupervisorName}{[Supervisor Name]}
+\newcommand{\CoSupervisorName}{[Co-Supervisor Name]}
+\newcommand{\ThrustHeadName}{[Thrust Head Name]}
 
 \begin{document}
 
 \frontmatter
-\maketitle
+
+\clearpage
+\thispagestyle{plain}
+\vspace*{25mm}
+\begin{center}
+{\Large\bfseries \ThesisTitleText\par}
+\vspace{5\baselineskip}
+by\par
+\vspace{1\baselineskip}
+{\Large \ThesisAuthorText\par}
+\vspace{5\baselineskip}
+A Thesis Submitted to\par
+The Hong Kong University of Science and Technology (Guangzhou)\par
+in Partial Fulfillment of the Requirements for\par
+the Degree of Master of Philosophy\par
+\ThesisThrustText\par
+in \ThesisProgramText\par
+\vfill
+\ThesisCompletionDateText, Guangzhou\par
+\end{center}
+
+\clearpage
+\thispagestyle{plain}
+\vspace*{25mm}
+\begin{center}
+{\Large\bfseries \ThesisTitleText\par}
+\vspace{1em}
+by \ThesisAuthorText\par
+\vspace{1em}
+\ThesisThrustText\par
+The Hong Kong University of Science and Technology (Guangzhou)\par
+\vspace{2em}
+Abstract\par
+\vspace{1em}
+\ThesisAbstractText\par
+\end{center}
+
+\clearpage
+\thispagestyle{plain}
+\vspace*{25mm}
+Authorization\par
+\vspace{1em}
+I hereby declare that I am the sole author of the thesis.\par
+I authorize the Hong Kong University of Science and Technology (Guangzhou) to lend this thesis to other institutions or individuals for the purpose of scholarly research.\par
+I further authorize the Hong Kong University of Science and Technology (Guangzhou) to reproduce the thesis by photocopying or by other means, in total or in part, at the request of other institutions or individuals for the purpose of scholarly research.\par
+\vfill
+\noindent \ThesisAuthorText\par
+\vspace{2\baselineskip}
+[Date]\par
+
+\clearpage
+\thispagestyle{plain}
+\vspace*{25mm}
+\begin{center}
+{\Large\bfseries \ThesisTitleText\par}
+\vspace{1em}
+by\par
+\vspace{1\baselineskip}
+{\Large \ThesisAuthorText\par}
+\end{center}
+\vspace{2em}
+This is to certify that I have examined the above MPhil thesis and have found that it is complete and satisfactory in all respects, and that any and all revisions required by the thesis examination committee have been made.\par
+\vspace{3em}
+\noindent \SupervisorName, Thesis Supervisor\par
+\vspace{1.5em}
+\noindent \CoSupervisorName, Thesis Co-Supervisor\par
+\vspace{1.5em}
+\noindent \ThrustHeadName, Head of Thrust\par
+\vfill
+\noindent [Date]\par
+
 \tableofcontents
 \listoffigures
 \listoftables
 
 \mainmatter
-\setcounter{chapter}{-1}
 
 \include{chapter0}
 \include{chapter1}
@@ -39,19 +116,8 @@
 \include{chapter4}
 \include{chapter5}
 \include{chapter6}
-\include{chapter7}
 
-\end{document}
-
-\setcounter{chapter}{-1}
-
-\include{chapter0}
-\include{chapter1}
-\include{chapter2}
-\include{chapter3}
-\include{chapter4}
-\include{chapter5}
-\include{chapter6}
+\backmatter
 \include{chapter7}
 
 \end{document}
