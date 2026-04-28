@@ -1,0 +1,20 @@
+# Python cache and test artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local editor settings
+.vscode/
+
+# Editor backup and temporary files
+*~
+*.swp
+*.swo
+*.tmp
+*.bak
+*.orig
+.DS_Store
+.ipynb_checkpoints/
+
+# Generated exports not tracked by git
+my/tb_exports/
