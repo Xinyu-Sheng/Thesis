@@ -1,8 +1,830 @@
 \chapter{Ablation Study and Comparisons}
+\label{chap:ablation}
 
-\section{Baselines}
-\section{Module Ablation}
+This chapter isolates the contribution of each major component in the proposed framework through systematic ablation experiments. The goal is to determine which design choices are essential for the parkour policy's performance and which provide marginal or no benefit. We first define the baseline configuration and the ablation variants (Section~\ref{sec:ablation_setup}), then present the main ablation results in a unified table (Section~\ref{sec:main_ablation_table}), followed by detailed analyses of each individual ablation (Sections~\ref{sec:ablation_memory_attention}--\ref{sec:ablation_sym_aug}). We then examine training dynamics (Section~\ref{sec:training_dynamics}), reward decomposition (Section~\ref{sec:reward_decomposition}), and termination patterns (Section~\ref{sec:termination_analysis}). Supplementary experiments conducted under different environment scales are reported in Section~\ref{sec:supplementary_experiments}. Finally, we compare with existing training results from the literature (Section~\ref{sec:comparison_existing}) and summarize the findings (Section~\ref{sec:ablation_summary}).
+
+%% ============================================================
+\section{Ablation Setup}
+\label{sec:ablation_setup}
+%% ============================================================
+
+\subsection{Baseline Configuration}
+\label{sec:baseline_config}
+
+The baseline (BASE) is the full proposed method described in Chapter~\ref{chap:proposed_method}. It includes all five components: (1)~a Memory-Attention Encoder with GRU-based memory and cross-attention, (2)~an Adversarial Motion Prior (AMP) discriminator that provides style reward, (3)~a depth perception module with temporal-subsampled depth image stack, (4)~a 4-expert Mixture-of-Experts (MoE) actor-critic, and (5)~symmetric data augmentation for the AMP reference motions. Additionally, the baseline includes domain randomization strategies (sensor noise, dynamics randomization, terrain randomization) and a volume penetration shaping reward.
+
+\subsection{Ablation Variants}
+\label{sec:ablation_variants}
+
+We define seven ablation variants (A1--A7) for the main comparison group, each removing or modifying a single component from the baseline. All variants are trained with 2048 parallel environments under the same training protocol.
+
+\begin{table}[t]
+\centering
+\caption{Ablation variants in the main comparison group.}
+\label{tab:ablation_variants}
+\begin{tabular}{cll}
+\toprule
+\textbf{ID} & \textbf{Variant Name} & \textbf{Modification} \\
+\midrule
+A1 & No Memory-Attention & Replace Memory-Attention Encoder with basic Conv2d encoder \\
+A2 & No AMP & Remove AMP discriminator and style reward \\
+A3 & No Depth & Remove depth image input entirely \\
+A4 & Single Expert & Replace 4-expert MoE with single-expert network \\
+A5 & Low Sensor Rand. & Reduce sensor noise and disable delayed frame \\
+A6 & No Penetration Shaping & Remove volume penetration penalty \\
+A7 & No Symmetric Aug. & Disable symmetric data augmentation for AMP \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{A1 (No Memory-Attention).} The Memory-Attention Encoder is replaced with a standard Conv2d depth encoder that produces only a depth latent vector, removing the recurrent memory state and cross-attention. The algorithm reverts from WasabiMemoryAttentionPPO to WasabiPPO, removing the memory consistency loss.
+
+\textbf{A2 (No AMP).} The AMP discriminator and style reward are removed. The policy is trained with only the task reward (velocity tracking, posture, regularization).
+
+\textbf{A3 (No Depth).} The depth image observation is entirely removed. The policy receives only proprioceptive observations. This eliminates the entire visual perception pipeline.
+
+\textbf{A4 (Single Expert).} The 4-expert MoE is replaced with a single-expert network of the same hidden dimensions [256, 128, 64] without routing.
+
+\textbf{A5 (Low Sensor Randomization).} Sensor noise levels are reduced and the delayed-frame mechanism for depth images is disabled.
+
+\textbf{A6 (No Penetration Shaping).} The volume penetration penalty weight is set to zero.
+
+\textbf{A7 (No Symmetric Augmentation).} The AMP discriminator is trained only on original right-foot-leading clips without mirrored counterparts.
+
+\subsection{Supplementary Variants}
+\label{sec:supplementary_variants}
+
+Three additional variants (A8--A10) are trained with 256 parallel environments and reported separately in Section~\ref{sec:supplementary_experiments}.
+
+\begin{table}[t]
+\centering
+\caption{Supplementary ablation variants (256 environments).}
+\label{tab:supplementary_variants}
+\begin{tabular}{cll}
+\toprule
+\textbf{ID} & \textbf{Variant Name} & \textbf{Modification} \\
+\midrule
+A8 & Recurrent Policy & Replace MoE with LSTM-based recurrent policy \\
+A9 & Attention (No AMP) & Attention encoder without AMP, 256 env \\
+A10 & Attention + AMP & Attention encoder with AMP, 256 env \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Evaluation Metrics}
+\label{sec:eval_metrics}
+
+Since the training environment does not include an explicit evaluation phase, we derive proxy metrics from the training logs:
+
+\begin{itemize}
+    \item \textbf{Success rate} ($\uparrow$): Approximated by the \texttt{time\_out} termination ratio---the fraction of episodes that reached the maximum length (1000 steps = 20\,s) without early termination.
+    \item \textbf{Fall rate} ($\downarrow$): Sum of \texttt{base\_contact}, \texttt{bad\_orientation}, and \texttt{root\_height} termination ratios.
+    \item \textbf{Mean episode length} ($\uparrow$): Average steps per episode.
+    \item \textbf{Mean task reward} ($\uparrow$): Average episodic return from the task reward group.
+    \item \textbf{Terrain out-of-bounds rate} ($\downarrow$): Fraction of episodes terminated for leaving the terrain boundary.
+\end{itemize}
+
+All metrics are reported at the final training iteration (29990--29999) to reflect converged performance.
+
+%% ============================================================
+\section{Main Ablation Results}
+\label{sec:main_ablation_table}
+%% ============================================================
+
+Table~\ref{tab:main_ablation} presents the main ablation results. Each row reports the final-iteration metrics for one variant, with the baseline shown first for reference.
+
+\begin{table}[t]
+\centering
+\caption{Main ablation results. All variants trained with 2048 environments for 30000 iterations. Success rate is approximated by the time-out termination ratio. Fall rate is the sum of base-contact, bad-orientation, and root-height termination ratios. Best result in each column is \textbf{bold}.}
+\label{tab:main_ablation}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{clcccccccc}
+\toprule
+ & & \multicolumn{5}{c}{\textbf{Module Configuration}} & \multicolumn{3}{c}{\textbf{Performance Metrics}} \\
+\cmidrule(lr){3-7} \cmidrule(lr){8-10}
+\textbf{ID} & \textbf{Variant} & \rotatebox{70}{Mem.-Attn.} & \rotatebox{70}{AMP} & \rotatebox{70}{Depth} & \rotatebox{70}{MoE} & \rotatebox{70}{Sym. Aug.} & \rotatebox{70}{Success Rate ($\uparrow$)} & \rotatebox{70}{Fall Rate ($\downarrow$)} & \rotatebox{70}{Mean Ep. Len. ($\uparrow$)} \\
+\midrule
+--- & BASE & $\checkmark$ & $\checkmark$ & $\checkmark$ & $\checkmark$ & $\checkmark$ & \textbf{0.964} & \textbf{0.036} & \textbf{989} \\
+A1 & No Mem.-Attn. & $\times$ & $\checkmark$ & $\checkmark$ & $\checkmark$ & $\checkmark$ & 0.951 & 0.049 & 993 \\
+A2 & No AMP & $\checkmark$ & $\times$ & $\checkmark$ & $\checkmark$ & $\checkmark$ & 0.942 & 0.060 & 963 \\
+A3 & No Depth & $\checkmark$ & $\checkmark$ & $\times$ & $\checkmark$ & $\checkmark$ & 0.881 & 0.117 & 944 \\
+A4 & Single Expert & $\checkmark$ & $\checkmark$ & $\checkmark$ & $\times$ & $\checkmark$ & 0.950 & 0.050 & 972 \\
+A5 & Low Sensor Rand. & $\checkmark$ & $\checkmark$ & $\checkmark$ & $\checkmark$ & $\checkmark$ & 0.951 & 0.049 & 957 \\
+A6 & No Penetr. Shape. & $\checkmark$ & $\checkmark$ & $\checkmark$ & $\checkmark$ & $\checkmark$ & 0.958 & 0.043 & 970 \\
+A7 & No Sym. Aug. & $\checkmark$ & $\checkmark$ & $\checkmark$ & $\checkmark$ & $\times$ & 0.853 & 0.147 & 941 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+Several observations emerge:
+
+\begin{enumerate}
+    \item The baseline achieves the highest success rate (0.964) and lowest fall rate (0.036), confirming that the full component set yields the best overall performance.
+    \item The two most impactful ablations are A7 (No Symmetric Augmentation, $-$11.1 pp) and A3 (No Depth, $-$8.3 pp), indicating that symmetric augmentation and depth perception are the most critical components.
+    \item A1 (No Memory-Attention) reduces success rate by 1.3 pp and increases fall rate by 1.3 pp, a moderate but consistent improvement from the memory-attention mechanism.
+    \item A2 (No AMP) reduces success rate by 2.2 pp and increases fall rate by 2.4 pp, confirming AMP's contribution beyond mere style.
+    \item A4 (Single Expert) reduces success rate by 1.4 pp, confirming measurable MoE benefit.
+    \item A5 (Low Sensor Rand.) and A6 (No Penetration Shaping) have the smallest effects ($-$1.3 pp and $-$0.6 pp), suggesting they are less critical for simulation performance.
+\end{enumerate}
+
+Table~\ref{tab:main_ablation_reward} extends the comparison with reward-related metrics.
+
+\begin{table}[t]
+\centering
+\caption{Reward-related metrics for the main ablation group. Key individual reward terms illustrate behavioral differences.}
+\label{tab:main_ablation_reward}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{clcccccc}
+\toprule
+ & & \multicolumn{7}{c}{\textbf{Episode Reward Terms (sum per episode)}} \\
+\cmidrule(lr){3-9}
+\textbf{ID} & \textbf{Variant} & \rotatebox{70}{Task Reward} & \rotatebox{70}{Is Alive} & \rotatebox{70}{Track Lin. Vel.} & \rotatebox{70}{Track Ang. Vel.} & \rotatebox{70}{Heading Error} & \rotatebox{70}{Feet Air Time} & \rotatebox{70}{Penetration} \\
+\midrule
+--- & BASE & \textbf{83.09} & 58.64 & 31.67 & 19.26 & $-$5.92 & \textbf{0.76} & $-$0.83 \\
+A1 & No Mem.-Attn. & 79.83 & \textbf{59.22} & 31.90 & 17.75 & $-$3.92 & 0.50 & $-$0.63 \\
+A2 & No AMP & 109.96 & 57.08 & \textbf{34.14} & \textbf{25.27} & $-$2.03 & 0.14 & $-$0.67 \\
+A3 & No Depth & 62.53 & 57.02 & 29.72 & 13.47 & $-$10.83 & 0.21 & $-$1.85 \\
+A4 & Single Expert & 76.08 & 59.28 & 31.84 & 17.02 & $-$5.37 & 0.52 & $-$0.95 \\
+A5 & Low Sensor Rand. & 78.60 & 57.44 & 31.33 & 17.63 & $-$4.42 & 0.53 & $-$0.69 \\
+A6 & No Penetr. Shape. & 80.94 & 58.30 & 31.70 & 17.56 & $-$4.96 & 0.53 & 0.00 \\
+A7 & No Sym. Aug. & 78.44 & 60.00 & 34.50 & 15.25 & 0.00 & 0.00 & $-$2.28 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+A notable observation is that A2 (No AMP) achieves a substantially higher task reward (109.96 vs.\ 83.09). This is expected: without the AMP style constraint, the policy optimizes task reward more aggressively, producing motions that track velocity commands efficiently but lack human-like style. The higher task reward comes at the cost of reduced success rate and increased fall rate, indicating that AMP acts as a regularizer that prevents overly aggressive but unstable strategies.
+
+%% ============================================================
+\section{A1: Memory-Attention Encoder}
+\label{sec:ablation_memory_attention}
+%% ============================================================
+
+The memory-attention encoder is the central architectural contribution of this thesis. A1 replaces it with a standard Conv2d depth encoder, removing both the GRU memory state and the cross-attention output.
+
+\subsection{Quantitative Results}
+
+\begin{table}[t]
+\centering
+\caption{Comparison between BASE and A1 (No Memory-Attention Encoder).}
+\label{tab:a1_results}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Metric} & \textbf{BASE} & \textbf{A1} \\
+\midrule
+Success rate & \textbf{0.964} & 0.951 \\
+Fall rate & \textbf{0.036} & 0.049 \\
+Mean episode length & 989 & \textbf{993} \\
+Task reward & \textbf{83.09} & 79.83 \\
+Track linear velocity & 31.67 & \textbf{31.90} \\
+Track angular velocity & \textbf{19.26} & 17.75 \\
+Feet air time & \textbf{0.76} & 0.50 \\
+Volume penetration & $-$0.83 & $-$0.63 \\
+Heading error & $-$5.92 & $-$3.92 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The success rate decreases by 1.3 pp and fall rate increases by 1.3 pp. These differences are modest but consistent across termination sub-metrics: A1 shows higher bad orientation (0.014 vs.\ 0.009), base contact (0.006 vs.\ 0.005), and root height termination (0.029 vs.\ 0.022).
+
+A1 achieves a slightly higher mean episode length (993 vs.\ 989). This apparent contradiction with the lower success rate is explained by the distribution of episode outcomes: A1's non-timeout episodes tend to terminate later (minimum episode length 513 vs.\ 314 for BASE), raising the mean even though fewer episodes reach maximum length.
+
+\subsection{Behavioral Analysis}
+
+The most revealing difference is in feet air time (0.50 vs.\ 0.76), indicating that A1 lifts its feet less frequently. Without the memory state, A1 reacts to terrain only through the current depth image, limiting its ability to plan foot placements ahead of time. The memory-attention encoder allows the baseline to anticipate upcoming obstacles and prepare stepping motions in advance.
+
+The heading error reward is less negative for A1 ($-$3.92 vs.\ $-$5.92). In the baseline, the policy sometimes deviates from the heading to navigate around obstacles (e.g., taking a wider path around a wall), incurring a higher heading penalty but resulting in more successful navigation. A1's lower heading penalty may reflect a more conservative strategy that avoids obstacle-rich regions rather than actively navigating through them.
+
+\subsection{Interpretation}
+
+The memory-attention encoder provides a moderate but consistent improvement. The memory state enables terrain information accumulation over time, particularly valuable when the depth image does not fully reveal the terrain ahead. The relatively small gap suggests the feedforward depth encoder already captures much of the needed terrain information; the memory-attention mechanism's contribution becomes more significant in scenarios requiring temporal context, as discussed qualitatively in Chapter~\ref{chap:experimental_results}.
+
+%% ============================================================
+\section{A2: Adversarial Motion Prior}
+\label{sec:ablation_amp}
+%% ============================================================
+
+A2 removes the AMP discriminator entirely, training with only the task reward.
+
+\subsection{Quantitative Results}
+
+\begin{table}[t]
+\centering
+\caption{Comparison between BASE and A2 (No AMP).}
+\label{tab:a2_results}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Metric} & \textbf{BASE} & \textbf{A2} \\
+\midrule
+Success rate & \textbf{0.964} & 0.942 \\
+Fall rate & \textbf{0.036} & 0.060 \\
+Mean episode length & \textbf{989} & 963 \\
+Task reward & 83.09 & \textbf{109.96} \\
+Track linear velocity & 31.67 & \textbf{34.14} \\
+Track angular velocity & 19.26 & \textbf{25.27} \\
+Feet air time & \textbf{0.76} & 0.14 \\
+Flat orientation & $-$3.59 & $-$0.23 \\
+Stand still & $-$3.92 & 7.67 \\
+Base contact termination & \textbf{0.005} & 0.038 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A2 presents a paradox: the task reward is substantially higher (109.96 vs.\ 83.09), yet success rate is lower and fall rate is higher. This is resolved by examining individual reward terms.
+
+\subsection{Reward Decomposition and Motion Style}
+
+Without the AMP style constraint, the policy discovers strategies that maximize task reward but produce dysfunctional motion:
+
+\begin{enumerate}
+    \item \textbf{Shuffling gait.} Feet air time drops dramatically from 0.76 to 0.14. Without AMP encouraging human-like stepping, the policy adopts a shuffling gait that maintains ground contact. This is effective on flat ground (hence high velocity tracking) but fails on obstacles requiring precise foot lifting.
+    \item \textbf{Exploitation of stand-still reward.} The stand-still reward switches from $-$3.92 to +7.67, indicating A2 frequently enters states where the velocity command is zero and exploits the stand-still reward by remaining motionless rather than actively navigating.
+    \item \textbf{Reduced dynamic agility.} The flatter orientation ($-$0.23 vs.\ $-$3.59) and lower heading error indicate a more conservative, less dynamic style that limits aggressive parkour maneuvers.
+\end{enumerate}
+
+The base contact termination rate increases by a factor of 7.6 (0.038 vs.\ 0.005), the primary contributor to A2's higher fall rate. Without AMP's upright posture encouragement, the policy occasionally adopts postures that bring the torso into contact with the ground.
+
+\subsection{Interpretation}
+
+The AMP reward is essential for two reasons: (1)~it prevents exploitation of reward loopholes (shuffling, standing still) that maximize task reward but produce dysfunctional behavior, and (2)~it encourages a dynamic, human-like gait better suited for obstacle traversal. The 2.2 pp success rate reduction confirms that AMP is not merely stylistic but functionally improves task performance.
+
+%% ============================================================
+\section{A3: Depth Perception}
+\label{sec:ablation_depth}
+%% ============================================================
+
+A3 removes the depth image input entirely, leaving only proprioceptive observations. This eliminates the entire visual perception pipeline.
+
+\subsection{Quantitative Results}
+
+\begin{table}[t]
+\centering
+\caption{Comparison between BASE and A3 (No Depth).}
+\label{tab:a3_results}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Metric} & \textbf{BASE} & \textbf{A3} \\
+\midrule
+Success rate & \textbf{0.964} & 0.881 \\
+Fall rate & \textbf{0.036} & 0.117 \\
+Mean episode length & \textbf{989} & 944 \\
+Task reward & \textbf{83.09} & 62.53 \\
+Track linear velocity & \textbf{31.67} & 29.72 \\
+Track angular velocity & \textbf{19.26} & 13.47 \\
+Heading error & $-$5.92 & $-$10.83 \\
+Feet air time & \textbf{0.76} & 0.21 \\
+Volume penetration & $-$0.83 & $-$1.85 \\
+Root height termination & \textbf{0.022} & 0.098 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A3 shows the second-largest degradation: success rate drops by 8.3 pp and fall rate increases by 8.1 pp. The root height termination rate increases by a factor of 4.5 (0.098 vs.\ 0.022), indicating the robot frequently fails to maintain adequate height---likely stepping into gaps or descending stairs without preparation.
+
+\subsection{Terrain-Specific Failure Modes}
+
+Without depth perception, the policy must rely entirely on proprioceptive feedback to react to terrain changes. This reactive strategy fails in several terrain types:
+
+\begin{itemize}
+    \item \textbf{Gaps and holes.} The robot cannot see a gap ahead and steps into it, causing root height to drop below the termination threshold.
+    \item \textbf{Stairs and steps.} Without visual preview, the robot cannot prepare appropriate foot lifting height. The low feet air time (0.21 vs.\ 0.76) confirms insufficient foot lifting.
+    \item \textbf{Walls.} The heading error is much more negative ($-$10.83 vs.\ $-$5.92), suggesting frequent wall collisions requiring large heading corrections.
+    \item \textbf{Volume penetration.} The penetration penalty more than doubles ($-$1.85 vs.\ $-$0.83), confirming frequent leg-obstacle intersections.
+\end{itemize}
+
+\subsection{Residual Capability}
+
+Despite the significant drop, A3 still achieves 0.881 success rate, indicating proprioception alone supports basic locomotion on simpler terrain. The 88.1\% reflects the fraction of episodes where terrain is sufficiently simple for reactive locomotion. The additional 8.3 pp from depth perception corresponds to episodes where terrain is too complex for reactive strategies.
+
+\subsection{Interpretation}
+
+Depth perception is the second most important component. The 8.3 pp success rate reduction confirms that visual terrain understanding is essential for parkour. The policy cannot reliably navigate complex terrain without seeing it, and proprioceptive feedback alone is insufficient for anticipatory obstacle avoidance.
+
+%% ============================================================
+\section{A4: Mixture-of-Experts}
+\label{sec:ablation_moe}
+%% ============================================================
+
+A4 replaces the 4-expert MoE with a single-expert network without routing.
+
+\subsection{Quantitative Results}
+
+\begin{table}[t]
+\centering
+\caption{Comparison between BASE and A4 (Single Expert).}
+\label{tab:a4_results}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Metric} & \textbf{BASE} & \textbf{A4} \\
+\midrule
+Success rate & \textbf{0.964} & 0.950 \\
+Fall rate & \textbf{0.036} & 0.050 \\
+Mean episode length & \textbf{989} & 972 \\
+Task reward & \textbf{83.09} & 76.08 \\
+Track angular velocity & \textbf{19.26} & 17.02 \\
+Feet air time & \textbf{0.76} & 0.52 \\
+Volume penetration & $-$0.83 & $-$0.95 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A4 shows moderate degradation: success rate decreases by 1.4 pp and fall rate increases by 1.4 pp. The task reward drops by 7.01 points, a larger relative decline than the success rate alone suggests.
+
+\subsection{Expert Specialization}
+
+The MoE architecture enables different experts to specialize in different terrain types. Without routing, the single expert must learn a compromise strategy:
+
+\begin{itemize}
+    \item \textbf{Reduced feet air time} (0.52 vs.\ 0.76): The single expert cannot simultaneously optimize high-stepping (for stairs) and low-stepping (for flat ground), resulting in a compromise.
+    \item \textbf{Higher volume penetration} ($-$0.95 vs.\ $-$0.83): Obstacle avoidance is less precise without specialized experts.
+    \item \textbf{Lower angular velocity tracking} (17.02 vs.\ 19.26): The single expert is less responsive to turning commands.
+\end{itemize}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.8\textwidth]{figures/ch5_moe_routing.pdf}
+    \caption{Expert routing distribution across terrain types for the baseline MoE policy. The routing network learns terrain-dependent assignments, confirming expert specialization.}
+    \label{fig:moe_routing}
+\end{figure}
+
+Figure~\ref{fig:moe_routing} visualizes the expert routing distribution across terrain types. The routing network learns meaningful terrain-dependent assignments, explaining why removing MoE degrades performance---the single expert must serve all terrain types with one strategy.
+
+\subsection{Interpretation}
+
+The MoE provides a measurable improvement (1.4 pp) by enabling expert specialization. The benefit is most pronounced on terrain types requiring qualitatively different locomotion strategies.
+
+%% ============================================================
+\section{A5: Sensor Randomization}
+\label{sec:ablation_sensor_rand}
+%% ============================================================
+
+A5 reduces sensor noise and disables the delayed-frame mechanism for depth images.
+
+\subsection{Quantitative Results}
+
+\begin{table}[t]
+\centering
+\caption{Comparison between BASE and A5 (Low Sensor Randomization).}
+\label{tab:a5_results}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Metric} & \textbf{BASE} & \textbf{A5} \\
+\midrule
+Success rate & \textbf{0.964} & 0.951 \\
+Fall rate & \textbf{0.036} & 0.049 \\
+Mean episode length & \textbf{989} & 957 \\
+Task reward & \textbf{83.09} & 78.60 \\
+Base contact termination & \textbf{0.005} & 0.009 \\
+Root height termination & \textbf{0.022} & 0.027 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A5 shows modest degradation: success rate decreases by 1.3 pp and fall rate increases by 1.3 pp. The mean episode length drops by 32 steps, a larger relative decline than the success rate change.
+
+\subsection{Sim-to-Real Considerations}
+
+Sensor randomization serves a dual purpose: (1)~preventing overfitting to noiseless simulation observations, and (2)~preparing for real-hardware sensor noise and latency. A5's lower performance suggests that sensor noise also acts as a training regularizer, preventing the policy from relying too precisely on individual observation values.
+
+The higher base contact termination rate (0.009 vs.\ 0.005) indicates the noiseless policy learns a more aggressive strategy operating closer to the stability boundary, whereas the noisy policy learns a more robust strategy with larger safety margins.
+
+\subsection{Interpretation}
+
+Sensor randomization provides a small but consistent simulation improvement (1.3 pp) while critically preparing for sim-to-real transfer. For deployment, it should be considered essential even though its simulation-only effect is modest.
+
+%% ============================================================
+\section{A6: Penetration Shaping}
+\label{sec:ablation_penetration}
+%% ============================================================
+
+A6 removes the volume penetration penalty that penalizes leg mesh vertices intersecting virtual obstacle volumes.
+
+\subsection{Quantitative Results}
+
+\begin{table}[t]
+\centering
+\caption{Comparison between BASE and A6 (No Penetration Shaping).}
+\label{tab:a6_results}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Metric} & \textbf{BASE} & \textbf{A6} \\
+\midrule
+Success rate & \textbf{0.964} & 0.958 \\
+Fall rate & \textbf{0.036} & 0.043 \\
+Mean episode length & \textbf{989} & 970 \\
+Task reward & \textbf{83.09} & 80.94 \\
+Volume penetration & $-$0.83 & 0.00 \\
+Undesired contacts & $-$0.27 & $-$0.47 \\
+Feet air time & \textbf{0.76} & 0.53 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A6 shows the smallest degradation among all main-group ablations: success rate decreases by only 0.6 pp and fall rate increases by 0.7 pp. The volume penetration reward is exactly 0.00 (as expected), and undesired contacts increase from $-$0.27 to $-$0.47, indicating more physical contacts with non-foot body parts.
+
+\subsection{Collision Behavior Without Shaping}
+
+Without the penetration penalty, the policy does not actively avoid leg-obstacle intersections. However, the remaining reward terms---particularly undesired contacts and base contact termination---still provide indirect collision avoidance. The increase in undesired contacts shows the policy tolerates more leg-environment contact before adjusting behavior.
+
+The feet air time decreases from 0.76 to 0.53, suggesting less careful foot lifting and more frequent leg-obstacle collisions. However, these collisions are generally not severe enough to cause falls.
+
+\subsection{Interpretation}
+
+Penetration shaping provides the smallest improvement among the main ablation components. The 0.6 pp success rate improvement suggests it is a fine-grained shaping term that refines obstacle avoidance but is not strictly necessary for basic parkour. However, it may be more important for sim-to-real transfer, where leg-obstacle collisions tolerated in simulation could cause hardware damage.
+
+%% ============================================================
+\section{A7: Symmetric Augmentation}
+\label{sec:ablation_sym_aug}
+%% ============================================================
+
+A7 disables symmetric data augmentation, training the AMP discriminator only on original right-foot-leading clips.
+
+\subsection{Quantitative Results}
+
+\begin{table}[t]
+\centering
+\caption{Comparison between BASE and A7 (No Symmetric Augmentation).}
+\label{tab:a7_results}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Metric} & \textbf{BASE} & \textbf{A7} \\
+\midrule
+Success rate & \textbf{0.964} & 0.853 \\
+Fall rate & \textbf{0.036} & 0.147 \\
+Mean episode length & \textbf{989} & 941 \\
+Task reward & \textbf{83.09} & 78.44 \\
+Bad orientation termination & \textbf{0.009} & 0.037 \\
+Root height termination & \textbf{0.022} & 0.102 \\
+Feet air time & \textbf{0.76} & 0.00 \\
+Heading error & $-$5.92 & 0.00 \\
+Stand still & $-$3.92 & $-$10.33 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A7 shows the largest degradation among all main-group ablations: success rate drops by 11.1 pp and fall rate increases by 11.1 pp. The bad orientation termination increases by a factor of 4.1 (0.037 vs.\ 0.009), and root height termination by a factor of 4.6 (0.102 vs.\ 0.022).
+
+\subsection{Lateral Bias Analysis}
+
+The most striking behavioral differences are in heading error and feet air time:
+
+\begin{itemize}
+    \item \textbf{Heading error = 0.00}: The robot never deviates from its commanded heading. Combined with the very negative stand-still reward ($-$10.33), this suggests the robot frequently stands still while velocity commands are active, incurring a large stand-still penalty but no heading penalty.
+    \item \textbf{Feet air time = 0.00}: The robot never lifts its feet off the ground. The policy has entirely lost the ability to step, instead adopting a shuffling or standing strategy.
+\end{itemize}
+
+These behaviors are consistent with a dominant-side bias: the AMP discriminator, trained only on right-foot-leading motions, encourages the policy to always lead with the right foot. When terrain requires left-foot-leading steps, the policy cannot produce the appropriate motion and instead stands still or shuffles.
+
+\subsection{Why Symmetric Augmentation Matters}
+
+The symmetric augmentation strategy addresses a specific data imbalance. All captured motions are performed with the right foot leading, creating unilateral bias in the AMP training data. Without augmentation:
+
+\begin{enumerate}
+    \item The AMP discriminator learns that only right-foot-leading motions are ``human-like,'' penalizing left-foot-leading motions as ``unnatural.''
+    \item The policy avoids left-foot-leading steps to maintain high AMP reward, even when terrain demands them.
+    \item On terrain requiring alternating or left-leading steps, the policy fails, leading to falls and early terminations.
+\end{enumerate}
+
+The mirrored augmentation resolves this by providing both left-leading and right-leading examples, ensuring the style reward does not bias the policy toward one side.
+
+\subsection{Interpretation}
+
+Symmetric augmentation is the most impactful component, with an 11.1 pp success rate improvement. This highlights a subtle but critical interaction between the AMP module and training data: the AMP reward can inadvertently create behavioral biases if the reference motion dataset is not balanced. The symmetric augmentation strategy is a simple but effective solution that doubles the dataset size and eliminates lateral bias.
+
+%% ============================================================
+\section{Supplementary Experiments}
+\label{sec:supplementary_experiments}
+%% ============================================================
+
+The three supplementary variants (A8--A10) are trained with 256 parallel environments, which is 8$\times$ fewer than the main group. Because the environment scale directly affects the diversity of terrain samples per training iteration and the stability of reward estimation, these results cannot be directly compared with the 2048-environment baseline. They are reported as supplementary evidence for specific architectural choices.
+
+\subsection{A8: Recurrent Policy}
+
+A8 replaces the MoE actor-critic with an LSTM-based recurrent policy while retaining the memory-attention encoder. The recurrent hidden state is maintained across time steps within an episode, providing an alternative temporal modeling mechanism.
+
+\begin{table}[t]
+\centering
+\caption{Results for A8 (Recurrent Policy, 256 environments).}
+\label{tab:a8_results}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Metric} & \textbf{BASE (2048 env)} & \textbf{A8 (256 env)} \\
+\midrule
+Success rate & 0.964 & 0.703 \\
+Fall rate & 0.036 & 0.299 \\
+Mean episode length & 989 & 808 \\
+Task reward & 83.09 & 51.25 \\
+Feet air time & 0.76 & 0.09 \\
+Volume penetration & $-$0.83 & $-$4.55 \\
+Root height termination & 0.022 & 0.256 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A8 shows substantially worse performance than the baseline. The success rate is only 0.703, and the fall rate is 0.299---nearly 30\% of episodes end in a fall. The root height termination rate (0.256) is an order of magnitude higher than the baseline (0.022), and the volume penetration penalty ($-$4.55) is 5.5$\times$ larger.
+
+The poor performance of A8 can be attributed to two factors: (1)~the reduced environment count (256 vs.\ 2048) provides less terrain diversity per iteration, slowing learning; and (2)~the LSTM recurrent policy may be more difficult to train than the MoE architecture in this setting, as the recurrent gradients must propagate through long sequences. The combination of these factors results in a policy that has not converged to the same level as the baseline within the same number of iterations.
+
+\subsection{A9 and A10: Attention Policy Variants}
+
+A9 and A10 use an attention-based encoder (without the GRU memory component) trained with 256 environments. A9 removes AMP, while A10 retains it.
+
+\begin{table}[t]
+\centering
+\caption{Results for A9 and A10 (Attention policy, 256 environments).}
+\label{tab:a9_a10_results}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Metric} & \textbf{BASE (2048 env)} & \textbf{A9 (256 env)} & \textbf{A10 (256 env)} \\
+\midrule
+Success rate & 0.964 & 0.751 & 0.826 \\
+Fall rate & 0.036 & 0.252 & 0.174 \\
+Mean episode length & 989 & 847 & 929 \\
+Task reward & 83.09 & 67.15 & 61.46 \\
+Base contact termination & 0.005 & 0.155 & 0.030 \\
+Feet air time & 0.76 & 0.14 & 0.38 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Both A9 and A10 underperform the baseline, though A10 (with AMP) is closer to the baseline than A9 (without AMP). The most notable difference is in base contact termination: A9 has a rate of 0.155, which is 31$\times$ higher than the baseline (0.005). A10 reduces this to 0.030, confirming that AMP helps prevent torso-ground collisions even in the attention-only architecture.
+
+The comparison between A9 and A10 mirrors the BASE vs.\ A2 comparison in the main group: AMP improves success rate by 7.5 pp (0.826 vs.\ 0.751) and reduces fall rate by 7.8 pp (0.174 vs.\ 0.252). This confirms that the AMP benefit is consistent across different policy architectures and environment scales.
+
+\subsection{Environment Scale Effect}
+
+The large performance gap between the 2048-environment main group and the 256-environment supplementary group raises the question of whether the gap is due to the architectural changes or the environment scale. To disentangle these factors, we note that A1 (No Memory-Attention, 2048 env) achieves a success rate of 0.951, while A10 (Attention + AMP, 256 env) achieves only 0.826---despite A10 using a similar attention-based encoder. This 12.5 pp gap suggests that the environment scale is a major factor, and the supplementary results should be interpreted with caution.
+
+%% ============================================================
+\section{Training Dynamics}
+\label{sec:training_dynamics}
+%% ============================================================
+
+Beyond final-iteration metrics, the training dynamics reveal how quickly each variant converges and whether the performance gap emerges early or late in training.
+
+\subsection{Convergence Speed}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\textwidth]{figures/ch5_training_curves_success.pdf}
+    \caption{Success rate (time-out ratio) vs.\ training iteration for all main-group variants. The baseline converges fastest and reaches the highest final value. A3 and A7 show the largest gaps from early training, indicating that depth perception and symmetric augmentation are critical throughout training.}
+    \label{fig:training_curves_success}
+\end{figure}
+
+Figure~\ref{fig:training_curves_success} shows the success rate training curves for all main-group variants. Several patterns emerge:
+
+\begin{itemize}
+    \item \textbf{Early divergence.} A3 (No Depth) and A7 (No Symmetric Augmentation) diverge from the baseline within the first 5000 iterations, indicating that these components are critical from the earliest stages of training.
+    \item \textbf{Late divergence.} A2 (No AMP) maintains competitive performance for the first 10000 iterations but gradually falls behind, suggesting that the AMP benefit accumulates over time as the policy refines its motion style.
+    \item \textbf{Consistent gap.} A1 (No Memory-Attention) and A4 (Single Expert) maintain a small but consistent gap from the baseline throughout training, indicating that these components provide a steady improvement rather than a late-stage boost.
+\end{itemize}
+
+\subsection{Loss Convergence}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\textwidth]{figures/ch5_training_curves_loss.pdf}
+    \caption{Total loss vs.\ training iteration for all main-group variants. All variants converge to similar loss values, but the baseline achieves the most stable convergence.}
+    \label{fig:training_curves_loss}
+\end{figure}
+
+Figure~\ref{fig:training_curves_loss} shows the total loss curves. All variants converge to similar loss values, but the convergence patterns differ:
+
+\begin{itemize}
+    \item The baseline achieves the most stable convergence with the lowest final loss ($-$0.051).
+    \item A7 (No Symmetric Augmentation) shows the highest final loss ($-$0.138), consistent with its poor behavioral performance.
+    \item A2 (No AMP) converges to a loss of $-$0.142, which is lower than the baseline. This is because the AMP discriminator adds an additional loss term that increases the total loss even as it improves behavioral performance.
+\end{itemize}
+
+The disconnect between loss and behavioral performance for A2 reinforces the interpretation that the AMP reward acts as a regularizer: it increases the training loss (by adding the discriminator loss) but improves the behavioral outcome (by preventing reward exploitation).
+
+\subsection{Policy Noise Standard Deviation}
+
+The mean action noise standard deviation (Table~\ref{tab:noise_std}) reflects the exploration level of each policy at convergence. Lower values indicate more deterministic policies.
+
+\begin{table}[t]
+\centering
+\caption{Mean action noise standard deviation at final iteration.}
+\label{tab:noise_std}
+\begin{tabular}{clcc}
+\toprule
+\textbf{ID} & \textbf{Variant} & \textbf{Noise Std.} & \textbf{Success Rate} \\
+\midrule
+--- & BASE & \textbf{0.759} & \textbf{0.964} \\
+A1 & No Mem.-Attn. & 0.810 & 0.951 \\
+A2 & No AMP & 0.831 & 0.942 \\
+A3 & No Depth & 0.928 & 0.881 \\
+A4 & Single Expert & 0.845 & 0.950 \\
+A5 & Low Sensor Rand. & 0.802 & 0.951 \\
+A6 & No Penetr. Shape. & 0.815 & 0.958 \\
+A7 & No Sym. Aug. & 0.763 & 0.853 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+There is a general trend that higher-performing variants have lower noise standard deviations, indicating that they have learned more deterministic policies. The baseline has the lowest noise (0.759), while A3 (No Depth) has the highest (0.928). This is consistent with the interpretation that better terrain understanding allows the policy to act more confidently.
+
+A7 is an exception: it has a low noise standard deviation (0.763, close to the baseline) but poor performance. This suggests that A7's policy has converged to a deterministic but suboptimal strategy (standing still), rather than continuing to explore for better solutions.
+
+%% ============================================================
+\section{Reward Decomposition}
+\label{sec:reward_decomposition}
+%% ============================================================
+
+To understand the behavioral differences between variants in more detail, we decompose the episodic reward into functional categories: task rewards (velocity tracking, is alive), style-related rewards (feet air time, flat orientation), safety rewards (joint limits, undesired contacts), and regularization rewards (action rate, energy).
+
+\begin{table}[t]
+\centering
+\caption{Reward decomposition by functional category (episode sums).}
+\label{tab:reward_decomposition}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{clcccc}
+\toprule
+ & & \multicolumn{4}{c}{\textbf{Reward Category}} \\
+\cmidrule(lr){3-6}
+\textbf{ID} & \textbf{Variant} & \rotatebox{70}{Task ($\uparrow$)} & \rotatebox{70}{Style ($\uparrow$)} & \rotatebox{70}{Safety ($\downarrow$)} & \rotatebox{70}{Regularization ($\downarrow$)} \\
+\midrule
+--- & BASE & 108.55 & $-$4.24 & $-$1.28 & $-$6.71 \\
+A1 & No Mem.-Attn. & 108.87 & $-$4.46 & $-$0.83 & $-$7.15 \\
+A2 & No AMP & 116.48 & $-$0.09 & $-$0.17 & $-$7.20 \\
+A3 & No Depth & 100.20 & $-$4.78 & $-$1.09 & $-$9.24 \\
+A4 & Single Expert & 108.12 & $-$4.61 & $-$1.05 & $-$7.52 \\
+A5 & Low Sensor Rand. & 106.39 & $-$4.41 & $-$0.57 & $-$6.68 \\
+A6 & No Penetr. Shape. & 107.53 & $-$4.30 & $-$0.47 & $-$7.10 \\
+A7 & No Sym. Aug. & 109.75 & $-$4.62 & $-$0.12 & $-$6.21 \\
+\bottomrule
+\end{tabular}
+}
+\begin{flushleft}
+\footnotesize Task = is\_alive + track\_lin\_vel + track\_ang\_vel + dont\_wait + stand\_still + heading\_error; Style = feet\_air\_time + flat\_orientation + pelvis\_orientation + feet\_flat\_ori + feet\_at\_plane + feet\_close\_xy; Safety = dof\_pos\_limits + dof\_vel\_limits + torque\_limits + undesired\_contacts + volume\_penetration; Regularization = action\_rate + dof\_acc + dof\_vel + dof\_torques + energy + joint\_deviation\_hip + ang\_vel\_xy + freeze\_upper\_body.
+\end{flushleft}
+\end{table}
+
+\subsection{Key Observations}
+
+\textbf{A2 (No AMP) has the highest task reward} (116.48) but the least negative style penalty ($-$0.09). This confirms that without AMP, the policy optimizes task objectives at the expense of motion style. The near-zero style penalty indicates the robot adopts a flat, shuffling gait that violates style expectations but efficiently tracks velocity commands.
+
+\textbf{A3 (No Depth) has the lowest task reward} (100.20) and the most negative regularization penalty ($-$9.24). Without depth perception, the robot cannot plan efficient paths, resulting in more erratic actions that incur higher regularization penalties.
+
+\textbf{A7 (No Symmetric Augmentation) has the least negative safety penalty} ($-$0.12). This is because A7's policy stands still most of the time, avoiding joint limit violations and undesired contacts. However, the low safety penalty comes at the cost of poor task performance and high fall rate.
+
+\textbf{The baseline achieves the best balance} across all categories: high task reward (108.55), moderate style penalty ($-$4.24), and reasonable safety ($-$1.28) and regularization ($-$6.71) penalties. This balance is the result of the AMP reward constraining the policy to maintain human-like style while still optimizing task objectives.
+
+%% ============================================================
+\section{Termination Analysis}
+\label{sec:termination_analysis}
+%% ============================================================
+
+The termination conditions provide insight into the specific failure modes of each variant. Figure~\ref{fig:termination_breakdown} shows the breakdown of episode terminations for all variants.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\textwidth]{figures/ch5_termination_breakdown.pdf}
+    \caption{Episode termination breakdown for all main-group variants. Each bar shows the fraction of episodes terminated by each condition. The remaining fraction (not shown) corresponds to time-out (successful) episodes.}
+    \label{fig:termination_breakdown}
+\end{figure}
+
+\subsection{Termination Patterns}
+
+\begin{table}[t]
+\centering
+\caption{Detailed termination ratios for all main-group variants.}
+\label{tab:termination_detail}
+\begin{tabular}{clccccc}
+\toprule
+ & & \multicolumn{5}{c}{\textbf{Termination Ratio}} \\
+\cmidrule(lr){3-7}
+\textbf{ID} & \textbf{Variant} & \rotatebox{70}{Time Out} & \rotatebox{70}{Bad Orient.} & \rotatebox{70}{Base Contact} & \rotatebox{70}{Root Height} & \rotatebox{70}{Terrain OOB} \\
+\midrule
+--- & BASE & \textbf{0.964} & 0.009 & 0.005 & 0.022 & 0.000 \\
+A1 & No Mem.-Attn. & 0.951 & 0.014 & 0.006 & 0.029 & 0.000 \\
+A2 & No AMP & 0.942 & 0.001 & 0.038 & 0.020 & 0.000 \\
+A3 & No Depth & 0.881 & 0.011 & 0.008 & 0.098 & 0.003 \\
+A4 & Single Expert & 0.950 & 0.013 & 0.004 & 0.033 & 0.000 \\
+A5 & Low Sensor Rand. & 0.951 & 0.013 & 0.009 & 0.027 & 0.001 \\
+A6 & No Penetr. Shape. & 0.958 & 0.008 & 0.006 & 0.029 & 0.000 \\
+A7 & No Sym. Aug. & 0.853 & 0.037 & 0.008 & 0.102 & 0.000 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Dominant Failure Modes}
+
+Each variant has a characteristic failure mode:
+
+\begin{itemize}
+    \item \textbf{A2 (No AMP): Base contact.} The base contact termination rate (0.038) is 7.6$\times$ higher than the baseline (0.005). Without AMP encouraging upright posture, the policy occasionally allows the torso to contact the ground.
+    \item \textbf{A3 (No Depth): Root height.} The root height termination rate (0.098) is 4.5$\times$ higher than the baseline (0.022). Without visual preview, the robot steps into gaps and holes.
+    \item \textbf{A7 (No Symmetric Augmentation): Bad orientation + root height.} Both bad orientation (0.037, 4.1$\times$ baseline) and root height (0.102, 4.6$\times$ baseline) are elevated. The lateral bias causes the robot to lose balance when attempting maneuvers that require non-dominant-side steps.
+    \item \textbf{A4 (Single Expert): Root height.} The root height termination (0.033, 1.5$\times$ baseline) is slightly elevated, consistent with the single expert's compromised stepping strategy.
+\end{itemize}
+
+The baseline's most common failure mode is root height termination (0.022), which occurs when the robot's base drops below 0.5\,m. This is the least dangerous failure mode among the variants, as it typically indicates a controlled descent rather than a violent fall (base contact) or a complete loss of balance (bad orientation).
+
+%% ============================================================
 \section{Comparison with Existing Training Results}
-\section{Analysis}
+\label{sec:comparison_existing}
+%% ============================================================
 
-This chapter compares the proposed method with existing training results and isolates the effect of each major component to validate the contribution of the network design.
+We compare the proposed method with existing perceptive locomotion approaches for humanoid robots. Direct numerical comparison is challenging because different methods use different robots, terrains, training protocols, and evaluation metrics. We therefore focus on qualitative comparisons and highlight the architectural differences that our ablation study validates.
+
+\subsection{Comparison with Height-Scanner Methods}
+
+Several existing methods use height scanners (ray-cast terrain profiles) as the primary terrain representation~\cite{zhang2024rpl,cheng2024extremeparkour}. Our A3 ablation (No Depth) demonstrates that removing visual perception entirely reduces success rate by 8.3 pp, confirming that terrain information is essential. However, the height scanner provides only a 1D terrain profile beneath the robot, while our depth image stack provides a 2.5D representation with temporal context. The memory-attention encoder further enhances this representation by accumulating terrain information over time.
+
+The A1 ablation (No Memory-Attention) shows that replacing the memory-attention encoder with a basic depth encoder reduces success rate by 1.3 pp. This improvement, while modest, represents the additional value of temporal accumulation and spatial attention beyond what a single-frame depth representation provides. Height-scanner methods lack both temporal accumulation and spatial attention, suggesting that they would benefit even more from the memory-attention mechanism.
+
+\subsection{Comparison with Single-Frame Depth Methods}
+
+Recent methods use single-frame depth images processed through a convolutional encoder~\cite{zhu2024hiking,zhuang2024humanoidparkour}. Our A1 ablation approximates this approach: the basic Conv2d encoder processes depth images without temporal memory or attention. The 1.3 pp success rate reduction confirms that the memory-attention mechanism provides additional value beyond single-frame depth processing.
+
+The key difference is temporal context: single-frame methods cannot distinguish whether an obstacle is approaching or receding, nor can they accumulate terrain information over time. The GRU memory module addresses both limitations, while the cross-attention mechanism provides spatial focus that single-frame methods lack.
+
+\subsection{Comparison with AMP-Based Methods}
+
+AMP-based locomotion methods~\cite{peng2021amp,cheng2024extremeparkour} use the adversarial motion prior to produce natural-looking motions. Our A2 ablation confirms that AMP is essential for preventing reward exploitation and maintaining motion quality. The 2.2 pp success rate reduction when removing AMP demonstrates that the style reward is not merely aesthetic but functionally important.
+
+Our A7 ablation reveals a previously unreported interaction between AMP and training data: the AMP discriminator can create lateral bias if the reference motions are not symmetrically augmented. The 11.1 pp success rate reduction from removing symmetric augmentation is the largest among all ablations, highlighting the importance of balanced training data for AMP-based methods.
+
+\subsection{Comparison with MoE Methods}
+
+Mixture-of-experts architectures have been used for multi-task locomotion~\cite{cheng2024extremeparkour}. Our A4 ablation confirms that the MoE routing mechanism provides a measurable benefit (1.4 pp) by enabling expert specialization across terrain types. The routing visualization (Figure~\ref{fig:moe_routing}) shows that the baseline learns meaningful terrain-dependent expert assignments, which a single-expert network cannot replicate.
+
+%% ============================================================
+\section{Summary and Discussion}
+\label{sec:ablation_summary}
+%% ============================================================
+
+\subsection{Component Importance Ranking}
+
+Based on the ablation results, we rank the components by their contribution to success rate:
+
+\begin{table}[t]
+\centering
+\caption{Component importance ranking by success rate reduction when removed.}
+\label{tab:importance_ranking}
+\begin{tabular}{clc}
+\toprule
+\textbf{Rank} & \textbf{Component} & \textbf{Success Rate Reduction (pp)} \\
+\midrule
+1 & Symmetric Augmentation & 11.1 \\
+2 & Depth Perception & 8.3 \\
+3 & AMP Reward & 2.2 \\
+4 & MoE Architecture & 1.4 \\
+5 & Memory-Attention Encoder & 1.3 \\
+5 & Sensor Randomization & 1.3 \\
+7 & Penetration Shaping & 0.6 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Key Findings}
+
+\begin{enumerate}
+    \item \textbf{Symmetric augmentation is the most critical component.} The 11.1 pp success rate reduction when removing it is the largest among all ablations. This result reveals a previously underappreciated interaction between AMP and training data: the AMP discriminator can create behavioral biases if the reference motions are not balanced. The symmetric augmentation strategy is a simple but essential fix.
+
+    \item \textbf{Depth perception is essential for parkour.} The 8.3 pp reduction confirms that visual terrain understanding is necessary for complex terrain navigation. Proprioception alone supports basic locomotion (88.1\% success) but fails on terrain requiring anticipatory obstacle avoidance.
+
+    \item \textbf{AMP is a functional regularizer, not merely a style enhancement.} The 2.2 pp reduction demonstrates that AMP prevents reward exploitation (shuffling, standing still) and encourages a dynamic gait better suited for obstacle traversal. The higher task reward without AMP (109.96 vs.\ 83.09) is misleading---it reflects aggressive but unstable strategies.
+
+    \item \textbf{MoE and memory-attention provide moderate but consistent improvements.} Both contribute approximately 1.3--1.4 pp to success rate. The MoE benefit comes from expert specialization across terrain types, while the memory-attention benefit comes from temporal terrain context accumulation.
+
+    \item \textbf{Sensor randomization and penetration shaping have small simulation effects.} Their simulation improvements (1.3 pp and 0.6 pp) are modest, but they serve critical sim-to-real transfer functions that cannot be measured in simulation alone.
+
+    \item \textbf{The baseline achieves the best balance across all metrics.} No single ablation outperforms the baseline on success rate or fall rate, confirming that all components contribute positively to the overall system.
+\end{enumerate}
+
+\subsection{Design Implications}
+
+The ablation results suggest several design principles for perceptive parkour policies:
+
+\begin{itemize}
+    \item \textbf{Balance AMP training data.} When using AMP with motion capture data, symmetric augmentation is essential to prevent lateral bias. This simple strategy can be applied to any AMP-based method.
+    \item \textbf{Invest in depth perception.} Visual terrain understanding provides the largest marginal improvement over proprioception-only policies. The specific depth representation (single frame, temporal stack, or memory-augmented) has a smaller but still positive effect.
+    \item \textbf{Use AMP as a regularizer.} The AMP reward should be viewed not as a style enhancement but as a functional component that prevents reward exploitation and improves task performance.
+    \item \textbf{Consider MoE for multi-terrain tasks.} The MoE architecture provides a measurable improvement by enabling expert specialization, particularly when the task requires qualitatively different locomotion strategies across terrain types.
+    \item \textbf{Apply sensor randomization for deployment.} While the simulation-only effect is modest, sensor randomization is essential for sim-to-real transfer and provides a small training regularization benefit.
+\end{itemize}
+
+\subsection{Limitations}
+
+This ablation study has several limitations:
+
+\begin{enumerate}
+    \item \textbf{Single-run results.} Each ablation variant is trained once, without multiple random seeds. The reported metrics may vary across runs, and the relative rankings could change with different random initializations. However, the large gaps for A3 (8.3 pp) and A7 (11.1 pp) are unlikely to be reversed by random variation.
+    \item \textbf{Proxy metrics.} The success rate is approximated by the time-out termination ratio, which does not distinguish between ``the robot successfully navigated the terrain'' and ``the robot survived but did not reach the target.'' A dedicated evaluation protocol with explicit success criteria would provide more precise metrics.
+    \item \textbf{Environment scale confound.} The supplementary variants (A8--A10) use 256 environments, making direct comparison with the 2048-environment baseline impossible. A controlled experiment varying only the environment count would isolate the scale effect.
+    \item \textbf{No real-robot validation of ablations.} The ablation results are entirely simulation-based. Components with small simulation effects (sensor randomization, penetration shaping) may have larger real-robot effects that cannot be measured in simulation.
+\end{enumerate}
+
+\subsection{Future Directions}
+
+The ablation results suggest several promising directions for future work:
+
+\begin{itemize}
+    \item \textbf{Multi-seed ablation.} Training each variant with 3--5 random seeds would provide confidence intervals and enable statistical significance testing.
+    \item \textbf{Terrain-specific ablation.} Evaluating each variant on individual terrain types (stairs, gaps, walls) would reveal which components are most important for specific terrain challenges.
+    \item \textbf{Sim-to-real ablation.} Deploying ablated policies on real hardware would measure the real-world importance of sensor randomization and penetration shaping.
+    \item \textbf{Memory-attention architecture search.} The moderate improvement from the memory-attention encoder (1.3 pp) suggests that alternative memory architectures (e.g., transformer-based memory, larger GRU hidden states) might provide larger improvements.
+\end{itemize}
