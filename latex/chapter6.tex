@@ -1,8 +1,236 @@
 \chapter{Training Procedure and Data Preparation}
 
-\section{Training Pipeline}
-\section{Data Collection and Preparation}
-\section{Hyperparameters}
-\section{Implementation Notes}
+This chapter describes the practical pipeline for preparing reference motion data and training the parkour policy described in Chapter~\ref{sec:method_overview}. We first present the overall training pipeline (Section~\ref{sec:training_pipeline}), then detail the data collection and preparation process (Section~\ref{sec:data_collection}), and finally discuss implementation details and hyperparameters (Section~\ref{sec:implementation_notes}).
 
-This chapter describes the training process, including dataset preparation, preprocessing, environment configuration, training schedules, and other practical details needed to reproduce the results.
+%% ============================================================
+\section{Training Pipeline}
+\label{sec:training_pipeline}
+%% ============================================================
+
+The end-to-end training pipeline consists of three stages, as illustrated in Figure~\ref{fig:training_pipeline}:
+
+\begin{enumerate}
+    \item \textbf{Motion data acquisition and preprocessing.} Raw human motion capture data is collected, preprocessed, and exported as standard BVH files. This stage addresses noise removal, coordinate system normalization, and format standardization.
+    \item \textbf{Cross-embodiment motion retargeting.} The preprocessed human motion data is retargeted from the human skeleton to the Unitree G1 robot skeleton using the General Motion Retargeting (GMR) framework, producing joint-angle trajectories in the robot's configuration space.
+    \item \textbf{Reference-frame conversion and AMP training.} The retargeted motion data is converted from the GMR output format to the Isaac Lab training format through joint sign correction, joint reordering, forward kinematics computation, and base reference-frame transformation. The resulting reference motions serve as the AMP discriminator training data for the parkour policy.
+\end{enumerate}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\textwidth]{figures/ch6_training_pipeline.pdf}
+    \caption{Overview of the training pipeline. Stage~1: raw motion capture data is preprocessed and exported as BVH. Stage~2: the GMR framework retargets human motion to the Unitree G1 robot skeleton. Stage~3: the retargeted data is converted to the Isaac Lab format and used to train the AMP discriminator.}
+    \label{fig:training_pipeline}
+\end{figure}
+
+%% ============================================================
+\section{Data Collection and Preparation}
+\label{sec:data_collection}
+%% ============================================================
+
+\subsection{Motion Capture Data Acquisition}
+\label{sec:mocap_acquisition}
+
+The reference motion data for the AMP module is collected using an optical motion capture system. The system records the 3D positions of reflective markers attached to the performer's body at a frame rate of 30\,Hz. The raw output is a CSV file containing per-frame marker positions along with metadata such as frame rate and length units.
+
+The captured motions focus on parkour-relevant skills: walking, stair climbing, and step traversal. All motions are performed with the right foot leading---the right foot initiates the step onto the stair or platform. This unilateral bias is intentional and is later addressed through symmetry-based data augmentation (Section~\ref{sec:data_augmentation}).
+
+\subsection{CSV-to-BVH Conversion}
+\label{sec:csv_to_bvh}
+
+The raw CSV marker data must be converted into a standard skeletal animation format (BVH) before it can be consumed by the retargeting pipeline. We initially attempted to implement a custom CSV-to-BVH conversion pipeline, which we describe below, and then explain why we ultimately adopted an alternative approach.
+
+\subsubsection{Custom Conversion Pipeline}
+
+The custom pipeline processes the raw CSV data through the following steps:
+
+\begin{enumerate}
+    \item \textbf{Fault-tolerant CSV reading.} The CSV file is parsed with automatic detection of the data start row by scanning for the first line containing both \texttt{Frame} and \texttt{Time} headers. Metadata such as frame rate (\texttt{FrameRate}) and length units (\texttt{LengthUnits}) are extracted from the header rows preceding the data section.
+
+    \item \textbf{Marker selection and reshaping.} The first and last $1/5$ of the total frames are trimmed to remove the initialization and finalization phases of the capture session. Among the remaining marker columns, only those with a missing-data ratio below $1\%$ are retained as high-quality markers. The selected marker data is reshaped from the flat column layout into a tensor of shape $[n_{\text{frames}}, n_{\text{markers}}, 3]$.
+
+    \item \textbf{Unit conversion and coordinate transformation.} If the metadata indicates millimeter units (or if the value range exceeds 1\,m, suggesting millimeter-scale data), all positions are divided by 1000 to convert to meters. If the vertical range of the $Z$-axis exceeds that of the $Y$-axis by a factor of 2, the coordinate system is identified as $Z$-up and the $Y$ and $Z$ axes are swapped to produce a $Y$-up convention consistent with the BVH standard.
+
+    \item \textbf{Missing-value interpolation.} Any remaining missing values (within the $1\%$ tolerance) are filled by linear interpolation along the time axis for each marker and each coordinate independently.
+
+    \item \textbf{Temporal denoising.} A Savitzky--Golay filter (window length 5, polynomial order 2) is applied independently to each marker's time series along each coordinate axis. This filter preserves the shape of the motion trajectory while removing high-frequency noise from the marker positions.
+
+    \item \textbf{Data quality validation.} The denoised data is evaluated on several criteria: marker count (minimum 15), frame count (minimum 2), missing-value ratio (below 10\%), and jitter amplitude (below 10\,cm). A composite quality score determines whether the data is suitable for the high-quality SMPL fitting path or must fall back to a simplified BVH generation method.
+
+    \item \textbf{SMPL body model fitting.} For data that passes the quality threshold, the SMPL body model is used to fit the marker data frame by frame. Each frame is optimized over the pose parameters $\boldsymbol{\theta} \in \mathbb{R}^{72}$ (24 joints $\times$ 3 axis-angle components), shape parameters $\boldsymbol{\beta} \in \mathbb{R}^{10}$, and translation $\mathbf{t} \in \mathbb{R}^{3}$. The optimization objective combines a marker distance loss, a temporal smoothness regularizer, and a shape regularizer:
+    \begin{equation}
+        \mathcal{L}_{\text{fit}} = 100 \cdot \mathcal{L}_{\text{marker}} + 10 \cdot \mathcal{L}_{\text{smooth}} + 0.01 \cdot \|\boldsymbol{\beta}\|^2
+    \end{equation}
+    The optimization is performed using L-BFGS-B with the previous frame's solution as initialization, ensuring temporal continuity of the fitted parameters. The resulting pose and translation parameters are then exported as a standard BVH file.
+\end{enumerate}
+
+\subsubsection{Limitations and Alternative Approach}
+
+Despite the careful design of the custom pipeline, the resulting BVH files exhibited noticeable motion artifacts---the exported joint trajectories were not sufficiently smooth, particularly at the extremities. The root cause is that the SMPL fitting step, while individually accurate per frame, does not enforce sufficient temporal consistency across frames. The per-frame optimization with only a first-order smoothness penalty cannot fully capture the coherent dynamics of human motion, leading to residual jitter in the joint angle trajectories.
+
+To address this issue, we adopted an alternative approach: the motion capture software's built-in post-processing pipeline is used to automatically process the raw marker data and directly export smoothed BVH files. The commercial motion capture software provides proprietary skeleton fitting and smoothing algorithms that produce significantly cleaner skeletal motion data than our custom pipeline. This approach sacrifices some control over the processing pipeline but yields BVH files of substantially higher quality, which is critical for the downstream retargeting and AMP training stages.
+
+\subsection{Motion Retargeting via GMR}
+\label{sec:motion_retargeting}
+
+The preprocessed BVH files encode human skeletal motion that cannot be directly used by the robot policy due to the morphological differences between the human body and the Unitree G1 robot. We employ the General Motion Retargeting (GMR) framework to bridge this embodiment gap. The retargeting process consists of the following steps:
+
+\subsubsection{Human Motion Preprocessing}
+
+The input BVH data is first preprocessed to construct a regularized full-body joint motion representation:
+\begin{enumerate}
+    \item \textbf{Noise filtering.} Residual high-frequency noise in the joint angle trajectories is removed through low-pass filtering.
+    \item \textbf{Temporal alignment.} The motion sequence is aligned to a consistent time base, ensuring uniform frame spacing.
+    \item \textbf{Skeletal pose computation.} The BVH hierarchy is traversed to compute the global position and orientation of each joint at every frame via forward kinematics, producing a structured representation of the human body's full-body joint motion over time.
+\end{enumerate}
+
+\subsubsection{Skeleton Topology Mapping and Scale Compensation}
+
+A topology mapping is established between the human skeleton joints and the corresponding robot body frames. For the Unitree G1 robot with 29 degrees of freedom, the mapping covers the pelvis, both legs (hip, knee, ankle), the torso, and both arms (shoulder, elbow, wrist). The mapping is defined in an IK configuration file that specifies, for each robot body frame, the corresponding human joint, the position and orientation tracking weights, and the positional and rotational offsets.
+
+Because the human and robot have different limb proportions, a non-uniform local scale compensation is applied. The human data is transformed into the root body's local coordinate frame, where each body part is scaled independently according to a per-part scale table. For the G1 robot, the lower-body scale factor is 0.9 (reflecting the G1's shorter legs relative to a 1.8\,m human) and the upper-body scale factor is 0.75 (reflecting the G1's shorter arms). This non-uniform scaling eliminates the morphological mismatch that would otherwise cause the retargeted motion to violate the robot's geometric constraints.
+
+\subsubsection{Hierarchical Inverse Kinematics}
+
+The core of the retargeting process is a hierarchical inverse kinematics (IK) solver that computes the robot's joint angles such that the robot's body frames track the scaled human joint positions and orientations. The IK solver operates in two priority levels:
+
+\begin{itemize}
+    \item \textbf{Priority 1 (lower body and torso orientation).} The first IK pass focuses on achieving the correct torso orientation and lower-body posture. The position cost for the ankle frames is set high (50) to ensure accurate foot placement, while the orientation cost for the torso frame is set to the maximum (100) to maintain upright posture. The position costs for intermediate leg joints (hip, knee) are set to zero in this pass, as their positions are implicitly determined by the ankle and pelvis constraints.
+
+    \item \textbf{Priority 2 (full-body refinement).} The second IK pass refines the full-body posture with balanced position and orientation costs across all body parts. The pelvis position cost is raised to 100 to ensure accurate root tracking, while the arm orientation costs are set to 100 to maintain natural arm swing.
+\end{itemize}
+
+Each IK pass uses the Mink solver framework with a damped least-squares formulation. The solver iterates until the tracking error converges below a threshold ($\Delta e < 0.001$) or a maximum iteration count (10) is reached. Joint limit constraints and optional velocity limits are enforced during the solve to ensure that the resulting joint angles are physically feasible.
+
+\subsubsection{Post-processing and Export}
+
+After IK solving, the resulting joint angle trajectories undergo additional post-processing:
+\begin{enumerate}
+    \item \textbf{Smooth filtering.} Temporal smoothing is applied to remove any residual discontinuities introduced by the per-frame IK solving.
+    \item \textbf{Joint limit correction.} Any joint angles that exceed the robot's physical limits are clamped to the valid range.
+    \item \textbf{Dynamics compliance check.} The motion trajectories are verified for dynamic plausibility, including ground contact consistency and center-of-mass stability.
+\end{enumerate}
+
+The final output is a \texttt{pkl} file containing the robot's root position $\mathbf{p}_t^{\text{root}} \in \mathbb{R}^3$, root orientation $\mathbf{q}_t^{\text{root}} \in \mathbb{R}^4$ (quaternion in $xyzw$ order), joint positions $\boldsymbol{\theta}_t \in \mathbb{R}^{29}$, and frame rate, structured as a time series over $N$ frames.
+
+\subsection{Reference-Frame Conversion for Isaac Lab}
+\label{sec:frame_conversion}
+
+The GMR retargeting output uses the pelvis frame as the base reference and follows the GMR joint naming and sign conventions. The Isaac Lab training environment, however, uses the \texttt{torso\_link} frame as the base reference and follows the URDF joint ordering and sign conventions. A conversion step is therefore required, which performs the following operations:
+
+\begin{enumerate}
+    \item \textbf{Joint sign correction.} The waist joints (\texttt{waist\_yaw\_joint}, \texttt{waist\_roll\_joint}, \texttt{waist\_pitch\_joint}) have opposite sign conventions between the GMR MuJoCo model and the Isaac Lab URDF model. The joint angles for these three joints are multiplied by $-1$ to match the URDF convention.
+
+    \item \textbf{Joint reordering.} The GMR output orders the 29 joints according to the MuJoCo model's degree-of-freedom indexing. The Isaac Lab environment expects joints in URDF parameter name order. A permutation map is constructed by matching each URDF joint name to its corresponding index in the GMR output, and the joint position array is reordered accordingly.
+
+    \item \textbf{Forward kinematics computation.} Using the URDF model loaded via \texttt{pytorch\_kinematics}, the forward kinematics chain is constructed and the poses of both the \texttt{pelvis} frame and the \texttt{torso\_link} frame are computed for each frame given the reordered joint angles and the original pelvis-frame base pose.
+
+    \item \textbf{Base reference-frame transformation.} The base pose is transformed from the \texttt{pelvis} frame to the \texttt{torso\_link} frame. For each frame, the relative transform from \texttt{pelvis} to \texttt{torso\_link} is computed as:
+    \begin{equation}
+        \mathbf{T}_{\text{torso}}^{\text{pelvis}} = \mathbf{T}_{\text{pelvis}}^{-1} \cdot \mathbf{T}_{\text{torso}}
+    \end{equation}
+    The new base pose in the world frame is then:
+    \begin{equation}
+        \mathbf{T}_{\text{torso}}^{\text{world}} = \mathbf{T}_{\text{pelvis}}^{\text{world}} \cdot \mathbf{T}_{\text{torso}}^{\text{pelvis}}
+    \end{equation}
+    The resulting position and quaternion (converted to $wxyz$ order) replace the original base pose in the output.
+\end{enumerate}
+
+The converted data is exported as an \texttt{npz} file containing the frame rate, joint names, joint positions (with corrected signs and reordered), and the transformed base position and orientation. This format is directly consumable by the Isaac Lab AMP demonstration loader.
+
+\subsection{Symmetry-Based Data Augmentation}
+\label{sec:data_augmentation}
+
+All captured motions are performed with the right foot leading---the right foot steps onto the stair or platform first. This unilateral bias is a practical constraint of the capture protocol, as performing both left-leading and right-leading variants of each motion would double the capture effort and introduce inter-trial variability that complicates the dataset.
+
+To address this bias and create a balanced dataset, we apply a symmetry-based data augmentation strategy. For each motion clip, a mirrored version is generated by:
+\begin{enumerate}
+    \item Swapping the left and right joint angles (e.g., \texttt{left\_hip\_pitch\_joint} $\leftrightarrow$ \texttt{right\_hip\_pitch\_joint}).
+    \item Negating the lateral components of the base position and the roll/yaw components of the base orientation.
+    \item Negating the sign of all roll-axis joint angles (e.g., \texttt{hip\_roll\_joint}, \texttt{ankle\_roll\_joint}, \texttt{shoulder\_roll\_joint}) to account for the mirror symmetry of the sagittal plane.
+\end{enumerate}
+
+This augmentation doubles the dataset size and ensures that the AMP discriminator receives approximately equal exposure to left-leading and right-leading motions, preventing the policy from developing a dominant-side bias during training.
+
+%% ============================================================
+\section{Implementation Details}
+\label{sec:implementation_notes}
+%% ============================================================
+
+\subsection{Training Environment Configuration}
+\label{sec:env_config}
+
+The parkour policy is trained in the Isaac Lab simulation framework, which provides GPU-accelerated parallel environments for efficient reinforcement learning. The key environment parameters are summarized in Table~\ref{tab:env_config}.
+
+\begin{table}[t]
+\centering
+\caption{Training environment configuration.}
+\label{tab:env_config}
+\begin{tabular}{ll}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\
+\midrule
+Number of parallel environments & 4096 \\
+Control frequency & 50\,Hz ($\Delta t = 0.02$\,s) \\
+Action space dimension & 29 (joint position targets) \\
+Observation space (actor) & 768 (proprio) + 64 (depth latent) + 8 (attn) + 128 (memory) \\
+Observation space (critic) & 792 (actor obs + 24 privileged) \\
+Episode length & 1000 steps (20\,s) \\
+Robot model & Unitree G1 (29-DOF) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Reward Function}
+\label{sec:reward_function}
+
+The reward function follows the standard AMP-based locomotion training paradigm, combining a task reward with a style reward from the AMP discriminator:
+
+\begin{equation}
+    r_t = w_{\text{task}} \cdot r_t^{\text{task}} + w_{\text{style}} \cdot r_t^{\text{AMP}}
+\end{equation}
+
+The task reward encourages the robot to track the commanded velocities, maintain an upright posture, and avoid joint-limit violations. The style reward from the AMP discriminator encourages the robot to produce natural, human-like motion patterns as specified by the retargeted reference motion data.
+
+\subsection{Hyperparameters}
+\label{sec:hyperparameters}
+
+The key training hyperparameters are listed in Table~\ref{tab:hyperparams}.
+
+\begin{table}[t]
+\centering
+\caption{Training hyperparameters.}
+\label{tab:hyperparams}
+\begin{tabular}{ll}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\
+\midrule
+PPO learning rate & $1 \times 10^{-4}$ \\
+PPO clip range & 0.2 \\
+GAE $\lambda$ & 0.95 \\
+Discount factor $\gamma$ & 0.99 \\
+Number of steps per rollout & 24 \\
+Number of mini-batches & 4 \\
+Number of PPO epochs & 5 \\
+AMP discriminator learning rate & $1 \times 10^{-4}$ \\
+Consistency loss weight $\lambda_{\text{cons}}$ & 0.1 \\
+Depth encoder learning rate & $1 \times 10^{-4}$ \\
+Total training steps & 48\,000 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Domain Randomization}
+\label{sec:domain_randomization}
+
+To bridge the sim-to-real gap, the following domain randomization strategies are applied during training:
+
+\begin{itemize}
+    \item \textbf{Observation noise.} Additive uniform noise is applied to proprioceptive observations as specified in Table~\ref{tab:proprio_obs}. Depth images undergo crop-and-resize, Gaussian blur, and random latency as described in Section~\ref{sec:depth_obs}.
+    \item \textbf{Dynamics randomization.} Robot body mass, joint friction, and actuator strength are randomized within physically plausible ranges.
+    \item \textbf{Terrain randomization.} The terrain generator randomly selects sub-terrain types and parameters for each environment, ensuring exposure to diverse terrain configurations.
+    \item \textbf{Command randomization.} Target positions are resampled at regular intervals, and velocity commands are perturbed with additive noise.
+\end{itemize}
+
+\subsection{Training Infrastructure}
+
+Training is conducted on a single NVIDIA GPU with 4096 parallel Isaac Gym environments. The total training time for the parkour policy is approximately 2--3 hours for 48\,000 steps. The AMP discriminator is trained jointly with the policy, receiving mini-batches of reference motion data sampled from the retargeted dataset at each training iteration.
