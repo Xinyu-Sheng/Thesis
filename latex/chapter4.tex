@@ -3,7 +3,7 @@
 
 This chapter presents the simulation results of the proposed memory-attention-based parkour policy. Since the core contribution of this thesis is a perception and memory design that improves terrain understanding, the most informative evidence is behavioral rather than scalar benchmark performance. Accordingly, the results emphasize how the policy behaves under different terrain conditions, how it reacts at the beginning of an episode when the memory state is still empty, how precisely it places its feet on target surfaces, and how it responds to obstacles such as gaps, stairs, and walls.
 
-The policy evaluated in this chapter is the target-driven G1 parkour system described in Chapter 3, with the playback environment Instinct-Parkour-Target-MemoryAttention-Amp-G1-Play-v0 used for visual inspection and rollout analysis. The playback configuration shares the same terrain family as the training environment, but it reduces the number of parallel environments and disables wall insertion to facilitate qualitative evaluation. When wall-specific behavior is discussed, the reference point is the full terrain generator used during training, where walls can still appear. This distinction is important because the main conclusions of this chapter concern the learned perception behavior rather than a single fixed simulation wrapper.
+The policy evaluated in this chapter is the target-driven G1 parkour system described in Chapter 3, with the playback environment MemoryAttentionAmpParkour used for visual inspection and rollout analysis. The playback configuration shares the same terrain family as the training environment, but it reduces the number of parallel environments and disables wall insertion to facilitate qualitative evaluation. When wall-specific behavior is discussed, the reference point is the full terrain generator used during training, where walls can still appear. This distinction is important because the main conclusions of this chapter concern the learned perception behavior rather than a single fixed simulation wrapper.
 
 \section{Evaluation Protocol}
 \label{sec:evaluation_protocol}
@@ -29,8 +29,8 @@ The terrain generator used by the G1 parkour task contains ten sub-terrain types
 
 \begin{table}[t]
 \centering
-\small
-\begin{tabular}{p{0.22\textwidth}p{0.28\textwidth}p{0.40\textwidth}}
+\footnotesize
+\begin{tabular}{@{}p{0.22\textwidth}p{0.28\textwidth}p{0.40\textwidth}@{}}
 \toprule
 \textbf{Terrain} & \textbf{Primary challenge} & \textbf{Observed behavior} \\
 \midrule
@@ -151,4 +151,4 @@ The AMP component also plays an important supporting role. Although AMP is not t
 
 There are still limitations. The experiments in this chapter are qualitative and simulation-based, so they do not yet provide a fully quantitative comparison across all design variants. In addition, the playback environment used for visualization disables wall insertion, which means that wall-specific behavior must be interpreted with respect to the full training terrain generator rather than the play wrapper alone. Finally, the camera blind spot under the robot remains an inherent sensing limitation, even though attention substantially reduces the associated errors.
 
-Despite these limitations, the overall conclusion is clear. The proposed memory-attention policy achieves the intended parkour behavior in simulation: it starts cautiously when the memory is empty, learns to place its feet accurately on the intended surface, retains terrain features long enough to avoid catching the swing foot, and handles walls without repeatedly colliding into them. On the full terrain family of Instinct-Parkour-Target-MemoryAttention-Amp-G1-Play-v0 and its training counterpart, the robot completes the terrain variations with strong qualitative robustness. This provides direct evidence that the perception design in Chapter 3 is useful for target-driven humanoid parkour.
+Despite these limitations, the overall conclusion is clear. The proposed memory-attention policy achieves the intended parkour behavior in simulation: it starts cautiously when the memory is empty, learns to place its feet accurately on the intended surface, retains terrain features long enough to avoid catching the swing foot, and handles walls without repeatedly colliding into them. On the full terrain family of MemoryAttentionAmpParkour and its training counterpart, the robot completes the terrain variations with strong qualitative robustness. This provides direct evidence that the perception design in Chapter 3 is useful for target-driven humanoid parkour.

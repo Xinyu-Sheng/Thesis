@@ -22,7 +22,8 @@ We define seven ablation variants (A1--A7) for the main comparison group, each r
 \centering
 \caption{Ablation variants in the main comparison group.}
 \label{tab:ablation_variants}
-\begin{tabular}{cll}
+\footnotesize
+\begin{tabular}{@{}cp{3.5cm}p{7cm}@{}}
 \toprule
 \textbf{ID} & \textbf{Variant Name} & \textbf{Modification} \\
 \midrule
@@ -97,8 +98,8 @@ Table~\ref{tab:main_ablation} presents the main ablation results. Each row repor
 \centering
 \caption{Main ablation results. All variants trained with 2048 environments for 30000 iterations. Success rate is approximated by the time-out termination ratio. Fall rate is the sum of base-contact, bad-orientation, and root-height termination ratios. Best result in each column is \textbf{bold}.}
 \label{tab:main_ablation}
-\resizebox{\textwidth}{!}{
-\begin{tabular}{clcccccccc}
+\footnotesize
+\begin{tabular}{@{}clcccccccc@{}}
 \toprule
  & & \multicolumn{5}{c}{\textbf{Module Configuration}} & \multicolumn{3}{c}{\textbf{Performance Metrics}} \\
 \cmidrule(lr){3-7} \cmidrule(lr){8-10}
@@ -114,7 +115,6 @@ A6 & No Penetr. Shape. & $\checkmark$ & $\checkmark$ & $\checkmark$ & $\checkmar
 A7 & No Sym. Aug. & $\checkmark$ & $\checkmark$ & $\checkmark$ & $\checkmark$ & $\times$ & 0.853 & 0.147 & 941 \\
 \bottomrule
 \end{tabular}
-}
 \end{table}
 
 Several observations emerge:
@@ -134,8 +134,8 @@ Table~\ref{tab:main_ablation_reward} extends the comparison with reward-related 
 \centering
 \caption{Reward-related metrics for the main ablation group. Key individual reward terms illustrate behavioral differences.}
 \label{tab:main_ablation_reward}
-\resizebox{\textwidth}{!}{
-\begin{tabular}{clcccccc}
+\footnotesize
+\begin{tabular}{@{}clccccccc@{}}
 \toprule
  & & \multicolumn{7}{c}{\textbf{Episode Reward Terms (sum per episode)}} \\
 \cmidrule(lr){3-9}
@@ -151,7 +151,6 @@ A6 & No Penetr. Shape. & 80.94 & 58.30 & 31.70 & 17.56 & $-$4.96 & 0.53 & 0.00 \
 A7 & No Sym. Aug. & 78.44 & 60.00 & 34.50 & 15.25 & 0.00 & 0.00 & $-$2.28 \\
 \bottomrule
 \end{tabular}
-}
 \end{table}
 
 A notable observation is that A2 (No AMP) achieves a substantially higher task reward (109.96 vs.\ 83.09). This is expected: without the AMP style constraint, the policy optimizes task reward more aggressively, producing motions that track velocity commands efficiently but lack human-like style. The higher task reward comes at the cost of reduced success rate and increased fall rate, indicating that AMP acts as a regularizer that prevents overly aggressive but unstable strategies.
@@ -638,8 +637,8 @@ To understand the behavioral differences between variants in more detail, we dec
 \centering
 \caption{Reward decomposition by functional category (episode sums).}
 \label{tab:reward_decomposition}
-\resizebox{\textwidth}{!}{
-\begin{tabular}{clcccc}
+\footnotesize
+\begin{tabular}{@{}clcccc@{}}
 \toprule
  & & \multicolumn{4}{c}{\textbf{Reward Category}} \\
 \cmidrule(lr){3-6}
@@ -655,7 +654,6 @@ A6 & No Penetr. Shape. & 107.53 & $-$4.30 & $-$0.47 & $-$7.10 \\
 A7 & No Sym. Aug. & 109.75 & $-$4.62 & $-$0.12 & $-$6.21 \\
 \bottomrule
 \end{tabular}
-}
 \begin{flushleft}
 \footnotesize Task = is\_alive + track\_lin\_vel + track\_ang\_vel + dont\_wait + stand\_still + heading\_error; Style = feet\_air\_time + flat\_orientation + pelvis\_orientation + feet\_flat\_ori + feet\_at\_plane + feet\_close\_xy; Safety = dof\_pos\_limits + dof\_vel\_limits + torque\_limits + undesired\_contacts + volume\_penetration; Regularization = action\_rate + dof\_acc + dof\_vel + dof\_torques + energy + joint\_deviation\_hip + ang\_vel\_xy + freeze\_upper\_body.
 \end{flushleft}

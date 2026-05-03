@@ -1,4 +1,5 @@
 \chapter{Training Procedure and Data Preparation}
+\label{chap:training}
 
 This chapter describes the practical pipeline for preparing reference motion data and training the parkour policy described in Chapter~\ref{sec:method_overview}. We first present the overall training pipeline (Section~\ref{sec:training_pipeline}), then detail the data collection and preparation process (Section~\ref{sec:data_collection}), and finally discuss implementation details and hyperparameters (Section~\ref{sec:implementation_notes}).
 
@@ -157,7 +158,7 @@ This augmentation doubles the dataset size and ensures that the AMP discriminato
 %% ============================================================
 
 \subsection{Training Environment Configuration}
-\label{sec:env_config}
+\label{sec:ch6_env_config}
 
 The parkour policy is trained in the Isaac Lab simulation framework, which provides GPU-accelerated parallel environments for efficient reinforcement learning. The key environment parameters are summarized in Table~\ref{tab:env_config}.
 
@@ -165,7 +166,8 @@ The parkour policy is trained in the Isaac Lab simulation framework, which provi
 \centering
 \caption{Training environment configuration.}
 \label{tab:env_config}
-\begin{tabular}{ll}
+\footnotesize
+\begin{tabular}{@{}p{4.5cm}p{8cm}@{}}
 \toprule
 \textbf{Parameter} & \textbf{Value} \\
 \midrule
@@ -181,7 +183,7 @@ Robot model & Unitree G1 (29-DOF) \\
 \end{table}
 
 \subsection{Reward Function}
-\label{sec:reward_function}
+\label{sec:ch6_reward_function}
 
 The reward function follows the standard AMP-based locomotion training paradigm, combining a task reward with a style reward from the AMP discriminator:
 
@@ -220,7 +222,7 @@ Total training steps & 48\,000 \\
 \end{table}
 
 \subsection{Domain Randomization}
-\label{sec:domain_randomization}
+\label{sec:ch6_domain_randomization}
 
 To bridge the sim-to-real gap, the following domain randomization strategies are applied during training:
 

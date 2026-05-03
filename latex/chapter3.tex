@@ -1,4 +1,5 @@
 \chapter{Proposed Method}
+\label{chap:proposed_method}
 
 This chapter presents the proposed control framework for target-driven humanoid parkour in detail. The framework integrates five key components---a temporal-subsampled depth perception module, a GRU-based memory module, a cross-attention module, a mixture-of-experts (MoE) action head, and an adversarial motion prior (AMP) module---into a unified policy architecture that enables a humanoid robot to navigate complex obstacle-laden environments with natural, adaptive locomotion. We describe each component in terms of its design motivation, network architecture, and qualitative behavioral effects, and compare the proposed design choices against existing approaches reviewed in Chapter~\ref{sec:rw_locomotion}. Implementation details including reward functions, environment configurations, and training procedures are provided at the end of this chapter.
 
@@ -52,7 +53,8 @@ The proprioceptive observation group provides the policy with information about 
 \centering
 \caption{Proprioceptive observation components for the policy. Each component is repeated over a history window of $H=8$ time steps. Additive uniform noise is applied during training for robustness.}
 \label{tab:proprio_obs}
-\begin{tabular}{llccc}
+\footnotesize
+\begin{tabular}{@{}lp{5.5cm}ccc@{}}
 \toprule
 \textbf{Component} & \textbf{Description} & \textbf{Dim.} & \textbf{Noise Range} & \textbf{Scale} \\
 \midrule
@@ -429,8 +431,8 @@ The reward function is composed of three categories: task rewards that encourage
 \centering
 \caption{Complete reward function components. Positive weights indicate rewards, negative weights indicate penalties.}
 \label{tab:reward_terms}
-\small
-\begin{tabular}{llrl}
+\footnotesize
+\begin{tabular}{@{}lp{3.2cm}rp{7cm}@{}}
 \toprule
 \textbf{Category} & \textbf{Term} & \textbf{Weight} & \textbf{Description} \\
 \midrule
@@ -504,7 +506,8 @@ The training environment uses a terrain generator that produces 10 types of sub-
 \centering
 \caption{Terrain types used in training, with their proportions and key parameters.}
 \label{tab:terrain_types}
-\begin{tabular}{llll}
+\footnotesize
+\begin{tabular}{@{}lp{1.5cm}p{4cm}p{4.5cm}@{}}
 \toprule
 \textbf{Type} & \textbf{Proportion} & \textbf{Key Parameters} & \textbf{Description} \\
 \midrule
@@ -621,8 +624,8 @@ Table~\ref{tab:design_summary} summarizes the key design choices of the proposed
 \centering
 \caption{Summary of key design choices and their advantages.}
 \label{tab:design_summary}
-\small
-\begin{tabular}{p{3.5cm}p{4cm}p{5cm}}
+\footnotesize
+\begin{tabular}{@{}p{3.5cm}p{4cm}p{5cm}@{}}
 \toprule
 \textbf{Design Choice} & \textbf{Existing Approach} & \textbf{Advantage} \\
 \midrule

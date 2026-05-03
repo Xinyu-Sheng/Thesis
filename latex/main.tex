@@ -15,19 +15,34 @@
 \usepackage{enumitem}
 \usepackage[hidelinks]{hyperref}
 \usepackage{titlesec}
+\usepackage{multirow}
+
 \titleformat{\chapter}[display]
   {\normalfont\huge\bfseries}{}{0pt}{\Huge}
 
 \setstretch{1.5}
 
+% 排版优化：减少hbox警告
+\sloppy
+\emergencystretch=3em
+\tolerance=1000
+\hbadness=1000
+\hfuzz=2pt
+
 \renewcommand{\bibname}{References}
 
 \newcommand{\ThesisTitleText}{Target-Driven Memory-Attention-Enhanced Humanoid Parkour}
 \newcommand{\ThesisAuthorText}{Xinyu SHENG}
-\newcommand{\ThesisProgramText}{[Name of Program]}
+\newcommand{\ThesisProgramText}{Red Bird MPhil Program}
 \newcommand{\ThesisThrustText}{Thrust of Robotics and Autonomous Systems}
 \newcommand{\ThesisCompletionDateText}{July 2026}
-\newcommand{\ThesisAbstractText}{[Abstract text, 300 words or less]}
+\newcommand{\ThesisAbstractText}{
+Humanoid parkour requires robots to navigate complex obstacle-rich environments via dynamic maneuvers (e.g., stair climbing, gap crossing, obstacle avoidance). This thesis proposes a target-driven control framework integrating memory augmentation, attention mechanisms, and adversarial motion priors for robust parkour on the Unitree G1 humanoid robot.
+
+Five key innovations are included: (1) temporally subsampled depth image stacks for temporal-spatial terrain representation; (2) a GRU-based memory module with consistency loss to preserve terrain context; (3) a cross-attention mechanism for task-relevant terrain focus; (4) a mixture-of-experts action head for adaptive skill specialization; (5) an adversarial motion prior (trained on human motion capture) to encourage natural gaits.
+
+Trained via reinforcement learning in simulation and deployed without fine-tuning, the policy enables stable locomotion on diverse real-world terrains (stairs, slopes, platforms, irregular rocks). The attention module supports proactive terrain awareness and precise foothold selection, while the memory module retains critical context during temporary visual occlusion. Results validate the proposed perception design achieves efficient, natural parkour in simulation and real-world deployment.
+}
 \newcommand{\SupervisorName}{Jun MA}
 \newcommand{\CoSupervisorName}{Qiang NIE}
 \newcommand{\ThrustHeadName}{Qiang HUANG}
@@ -39,22 +54,21 @@
 \clearpage
 \thispagestyle{plain}
 \vspace*{25mm}
+\clearpage
+\thispagestyle{plain}
+\vspace*{25mm}
 \begin{center}
 {\Large\bfseries \ThesisTitleText\par}
-\vspace{5\baselineskip}
-by\par
-\vspace{1\baselineskip}
-{\Large \ThesisAuthorText\par}
-\vspace{5\baselineskip}
-A Thesis Submitted to\par
-The Hong Kong University of Science and Technology (Guangzhou)\par
-in Partial Fulfillment of the Requirements for\par
-the Degree of Master of Philosophy\par
+\vspace{1em}
+by \ThesisAuthorText\par
+\vspace{1em}
 \ThesisThrustText\par
-in \ThesisProgramText\par
-\vfill
-\ThesisCompletionDateText, Guangzhou\par
+The Hong Kong University of Science and Technology (Guangzhou)\par
+\vspace{2em}
+{\Large\bfseries Abstract\par}
 \end{center}
+\vspace{1em}
+\noindent\ThesisAbstractText\par
 
 \clearpage
 \thispagestyle{plain}
